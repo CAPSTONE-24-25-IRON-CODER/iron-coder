@@ -4,7 +4,7 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Key, Response};
+use egui::{Key, Response, Widget};
 use egui_extras::RetainedImage;
 use log::{info, warn};
 use std::collections::HashMap;
@@ -411,6 +411,32 @@ impl Project {
 
                     let image_rect = retained_image.show_max_size(ui, display_size).rect;
 
+                    // Actions for board-level stuff -- Gets rid of red box
+                    ui.allocate_rect(image_rect, egui::Sense::hover())
+                        .context_menu(|ui| {
+                            ui.menu_button("pinout info", |ui| {
+                                for po in board.get_pinout().iter() {
+                                    let label = format!("{:?}", po);
+                                    if ui.button(label).clicked() {
+                                        info!("No action coded for this yet.");
+                                    }
+                                }
+                            });
+                            ui.menu_button("rust-analyser stuff", |ui| {
+                                for s in board.ra_values.iter() {
+                                    if ui.label(format!("{:?}", s.label)).clicked() {
+                                        info!("{:?}", s);
+                                    }
+                                }
+                            });
+                            if ui.button("remove board from system").clicked() {
+                                self.system.remove_board(board.clone()).unwrap_or_else(|_| {
+                                    warn!("error removing board from system.");
+                                });
+                            }
+                        });
+
+
                     // iterate through the pin_nodes of the board, and check if their rects (properly scaled and translated)
                     // contain the pointer. If so, actually draw the stuff there.
                     for (pin_name, mut pin_rect) in board.clone().svg_board_info.unwrap().pin_rects {
@@ -492,7 +518,7 @@ impl Project {
             let board_response = response.response;
             let pin_response = response.inner;
 
-            // Actions for board-level stuff
+            /* Actions for board-level stuff - red box bug
             board_response.context_menu(|ui| {
                 ui.menu_button("pinout info", |ui| {
                     for po in board.get_pinout().iter() {
@@ -514,7 +540,7 @@ impl Project {
                         warn!("error removing board from system.");
                     });
                 }
-            });
+            }); */
 
             // Actions for pin-level stuff
             if let Some(pin) = pin_response {
