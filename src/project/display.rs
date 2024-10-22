@@ -367,6 +367,7 @@ impl Project {
                         if columns[col].add(board::display::BoardSelectorWidget(b)).clicked() {
                             board = Some(self.known_boards[i].clone());
                         }
+                        // TODO reb - add button for adding new board not shown
                     }
                 });
             });
@@ -380,6 +381,20 @@ impl Project {
         return board;
 
     }
+
+    // TODO reb - implement display_generate_new_board
+    pub fn display_generate_new_board(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+
+    }
+    // TODO reb - implement display_image_uploader
+    pub fn display_image_uploader(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+
+    }
+    // TODO reb - implement display_board_png
+    pub fn display_board_png(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        // TODO Include fuctionality for user to draw circles
+    }
+
 
     /// Show the boards in egui "Area"s so we can move them around!
     pub fn display_system_editor_boards(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
