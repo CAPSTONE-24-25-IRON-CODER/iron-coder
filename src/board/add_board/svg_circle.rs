@@ -24,7 +24,8 @@ pub struct SvgCircle {
 
 impl SvgCircle {
     pub fn generateSVGPins (&self, file_path: &Path) -> (){
-        //TODO Implement adding to SVG file
+        // TODO Implement adding to SVG file
+        // TODO make return type the generated SVG element?
     }
 
     pub fn cleanup (&self, file_path: &Path) -> (){
