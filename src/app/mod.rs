@@ -92,6 +92,7 @@ pub struct IronCoderApp {
     display_about: bool,
     display_settings: bool,
     display_boards_window: bool,
+    display_example_code: bool,
     // #[serde(skip)]
     // modal: Option<Modal>,
     mode: Mode,
@@ -114,6 +115,7 @@ impl Default for IronCoderApp {
             display_about: false,
             display_settings: false,
             display_boards_window: false,
+            display_example_code: false,
             // modal: None,
             mode: Mode::EditProject,
             boards: boards,
@@ -182,6 +184,7 @@ impl IronCoderApp {
         let Self {
             display_about,
             display_settings,
+            display_example_code,
             mode,
             project,
             ..
@@ -272,6 +275,14 @@ impl IronCoderApp {
                         );
                         if ui.add(ib).clicked() {
                             *display_about = !*display_about;
+                        }
+                        //TO DO: actually have button for opening example do something
+                        let ib = egui::widgets::Button::image_and_text(
+                            icons.get("file_icon").unwrap().clone(),
+                            "open example"
+                        );
+                        if ui.add(ib).clicked() {
+                            *display_example_code = !*display_example_code;
                         }
 
                         let ib = egui::widgets::Button::image_and_text(
@@ -499,6 +510,34 @@ impl IronCoderApp {
             // ctx.move_to_top(window_response.unwrap().response.layer_id);
             window_response.unwrap().response.layer_id.order = egui::Order::Foreground;
         }
+
+    }
+
+    // This method will show or hide the "example code" window
+    // TODO: have example code load when 
+    pub fn display_example_code_window(&mut self, ctx: &egui::Context) {
+        let Self {
+            display_example_code,
+            ..
+        } = self;
+        if !*display_example_code { return; }
+        let blink_leds = egui::Button::new("Blink LEDS");
+        let alarm_clock = egui::Button::new("Alarm Clock"); 
+        egui::Window::new("Pick Example Code To Load")
+        .open(display_example_code)
+        .movable(true)
+        .show( ctx, |ui| {
+            //TODO: Error handling
+            // possible new function for instead of load from since it was previously private
+            // actually make example projects, current code is from the auto generation
+            // have window close after opening example
+            let ib = ui.add(alarm_clock);
+            if ib.clicked() {
+                self.project.load_from(Path::new("example-code/Test1"));
+                ui.close_menu();
+            }
+            ui.add(blink_leds);
+        });
 
     }
 
@@ -778,6 +817,7 @@ impl eframe::App for IronCoderApp {
         // optionally render these popup windows
         self.display_settings_window(ctx);
         self.display_about_window(ctx);
+        self.display_example_code_window(ctx);
         self.unselected_mainboard_warning(ctx);
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
