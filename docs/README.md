@@ -8,6 +8,7 @@
   - Architecture for automatically generating board planned out, including where the new menu button needs to be added in source code
   - Create structs to store persistent state for fields needed to automatically generate boards
   - Learning Rust, looking through EGUI documentation to help understand the existing code base
+  - Iron Coder Forum work done is listed in the forum repository
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
