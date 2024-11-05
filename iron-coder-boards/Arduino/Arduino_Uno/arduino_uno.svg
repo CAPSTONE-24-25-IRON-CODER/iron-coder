@@ -48,7 +48,7 @@
        y="0" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1"
+       id="scl"
        cx="19.219858"
        cy="1.0499469"
        r="0.8166253"
@@ -60,7 +60,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2"
+       id="sda"
        cx="21.134527"
        cy="1.0540408"
        r="0.8166253"
@@ -72,7 +72,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-1"
+       id="aref"
        cx="23.042658"
        cy="1.09606"
        r="0.8166253"
@@ -84,7 +84,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-7"
+       id="gnd"
        cx="25.005989"
        cy="1.1033491"
        r="0.8166253"
@@ -96,7 +96,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-5"
+       id="d13"
        cx="26.965454"
        cy="1.125439"
        r="0.8166253"
@@ -108,7 +108,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-9"
+       id="d12"
        cx="28.862516"
        cy="1.0739701"
        r="0.8166253"
@@ -120,7 +120,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-56"
+       id="d11"
        cx="30.816626"
        cy="0.98389941"
        r="0.8166253"
@@ -132,7 +132,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-8"
+       id="d10"
        cx="32.752289"
        cy="1.0225011"
        r="0.8166253"
@@ -144,7 +144,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-4"
+       id="d9"
        cx="34.630905"
        cy="1.1125718"
        r="0.8166253"
@@ -156,7 +156,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-40"
+       id="d8"
        cx="36.540833"
        cy="1.0611029"
        r="0.8166253"
@@ -168,7 +168,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-57"
+       id="d7"
        cx="39.697174"
        cy="1.0096339"
        r="0.8166253"
@@ -180,7 +180,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-6"
+       id="d6"
        cx="41.579437"
        cy="1.0482355"
        r="0.8166253"
@@ -192,7 +192,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-85"
+       id="d5"
        cx="43.539124"
        cy="1.0739701"
        r="0.8166253"
@@ -204,7 +204,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-19"
+       id="d4"
        cx="45.450764"
        cy="1.0482355"
        r="0.8166253"
@@ -216,7 +216,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-62"
+       id="d3"
        cx="47.388359"
        cy="1.0868373"
        r="0.8166253"
@@ -228,7 +228,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-73"
+       id="d2"
        cx="49.334957"
        cy="1.0868373"
        r="0.8166253"
@@ -240,7 +240,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-18"
+       id="d1/tx"
        cx="51.281776"
        cy="1.1511735"
        r="0.8166253"
@@ -252,7 +252,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-856"
+       id="d0/rx"
        cx="53.167683"
        cy="1.1125718"
        r="0.8166253"
@@ -264,19 +264,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-61"
-       cx="26.167461"
-       cy="37.869137"
-       r="0.8166253"
-       inkscape:tile-cx="19.219859"
-       inkscape:tile-cy="1.0499469"
-       inkscape:tile-w="1.6332507"
-       inkscape:tile-h="1.6332507"
-       inkscape:tile-x0="18.403234"
-       inkscape:tile-y0="0.23332162" />
-    <circle
-       style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-59"
+       id="ioref"
        cx="28.155537"
        cy="37.894592"
        r="0.8166253"
@@ -288,7 +276,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-48"
+       id="5V"
        cx="33.966721"
        cy="37.9328"
        r="0.8166253"
@@ -300,7 +288,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-3"
+       id="gnd"
        cx="35.862984"
        cy="37.947689"
        r="0.8166253"
@@ -312,7 +300,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-590"
+       id="gnd"
        cx="37.768261"
        cy="37.905338"
        r="0.8166253"
@@ -324,7 +312,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-75"
+       id="vin"
        cx="39.72591"
        cy="37.905338"
        r="0.8166253"
@@ -336,7 +324,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-47"
+       id="a0"
        cx="43.552494"
        cy="37.88316"
        r="0.8166253"
@@ -348,7 +336,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-624"
+       id="a1"
        cx="45.502125"
        cy="37.927513"
        r="0.8166253"
@@ -360,7 +348,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-58"
+       id="a2"
        cx="47.45945"
        cy="37.919926"
        r="0.8166253"
@@ -372,7 +360,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-37"
+       id="a3"
        cx="49.358219"
        cy="37.902416"
        r="0.8166253"
@@ -384,7 +372,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-63"
+       id="a4"
        cx="51.238262"
        cy="37.926926"
        r="0.8166253"
@@ -396,7 +384,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-405"
+       id="a5"
        cx="53.314148"
        cy="37.902416"
        r="0.8166253"
@@ -408,7 +396,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-0"
+       id="reset"
        cx="30.058311"
        cy="37.927998"
        r="0.8166253"
@@ -420,7 +408,7 @@
        inkscape:tile-y0="0.23332162" />
     <circle
        style="fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19149"
-       id="path1-2-2"
+       id="3V3"
        cx="32.038589"
        cy="37.933575"
        r="0.8166253"
