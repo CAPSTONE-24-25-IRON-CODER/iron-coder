@@ -4,7 +4,7 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Key, Response};
+use egui::{Key, Response, Widget};
 use egui_extras::RetainedImage;
 use log::{info, warn};
 use std::collections::HashMap;
@@ -367,6 +367,7 @@ impl Project {
                         if columns[col].add(board::display::BoardSelectorWidget(b)).clicked() {
                             board = Some(self.known_boards[i].clone());
                         }
+                        // TODO reb - add button for adding new board not shown
                     }
                 });
             });
@@ -380,6 +381,20 @@ impl Project {
         return board;
 
     }
+
+    // TODO reb - implement display_generate_new_board
+    pub fn display_generate_new_board(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+
+    }
+    // TODO reb - implement display_image_uploader
+    pub fn display_image_uploader(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+
+    }
+    // TODO reb - implement display_board_png
+    pub fn display_board_png(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        // TODO Include fuctionality for user to draw circles
+    }
+
 
     /// Show the boards in egui "Area"s so we can move them around!
     pub fn display_system_editor_boards(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -410,6 +425,32 @@ impl Project {
                     let display_size = svg_board_info.physical_size * scale;
 
                     let image_rect = retained_image.show_max_size(ui, display_size).rect;
+
+                    // Actions for board-level stuff -- Gets rid of red box
+                    ui.allocate_rect(image_rect, egui::Sense::hover())
+                        .context_menu(|ui| {
+                            ui.menu_button("pinout info", |ui| {
+                                for po in board.get_pinout().iter() {
+                                    let label = format!("{:?}", po);
+                                    if ui.button(label).clicked() {
+                                        info!("No action coded for this yet.");
+                                    }
+                                }
+                            });
+                            ui.menu_button("rust-analyser stuff", |ui| {
+                                for s in board.ra_values.iter() {
+                                    if ui.label(format!("{:?}", s.label)).clicked() {
+                                        info!("{:?}", s);
+                                    }
+                                }
+                            });
+                            if ui.button("remove board from system").clicked() {
+                                self.system.remove_board(board.clone()).unwrap_or_else(|_| {
+                                    warn!("error removing board from system.");
+                                });
+                            }
+                        });
+
 
                     // iterate through the pin_nodes of the board, and check if their rects (properly scaled and translated)
                     // contain the pointer. If so, actually draw the stuff there.
@@ -492,7 +533,7 @@ impl Project {
             let board_response = response.response;
             let pin_response = response.inner;
 
-            // Actions for board-level stuff
+            /* Actions for board-level stuff - red box bug
             board_response.context_menu(|ui| {
                 ui.menu_button("pinout info", |ui| {
                     for po in board.get_pinout().iter() {
@@ -514,7 +555,7 @@ impl Project {
                         warn!("error removing board from system.");
                     });
                 }
-            });
+            }); */
 
             // Actions for pin-level stuff
             if let Some(pin) = pin_response {
