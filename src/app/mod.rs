@@ -521,8 +521,11 @@ impl IronCoderApp {
             ..
         } = self;
         if !*display_example_code { return; }
-        let blink_leds = egui::Button::new("Blink LEDS");
-        let alarm_clock = egui::Button::new("Alarm Clock"); 
+        let blink_leds = egui::Button::new("Blink LEDS(RP-2040)");
+        let alarm_clock = egui::Button::new("Alarm Clock(Arduino)");
+        let led_array = egui::Button::new("LED Array(RP 2040)");
+        let lcd_screen = egui::Button::new("LCD Screen (RP-2040)");
+        let traffic_light = egui::Button::new("Traffic Lights"); 
         egui::Window::new("Pick Example Code To Load")
         .open(display_example_code)
         .movable(true)
@@ -531,12 +534,27 @@ impl IronCoderApp {
             // possible new function for instead of load from since it was previously private
             // actually make example projects, current code is from the auto generation
             // have window close after opening example
-            let ib = ui.add(alarm_clock);
+            let ib = ui.add(blink_leds);
             if ib.clicked() {
-                self.project.load_from(Path::new("example-code/Test1"));
+                self.project.load_from(Path::new("example-code/blink_leds"));
                 ui.close_menu();
             }
-            ui.add(blink_leds);
+            if ui.add(alarm_clock).clicked() {
+                self.project.load_from(Path::new("example-code/alarm_clock"));
+                ui.close_menu();
+            }
+            if ui.add(led_array).clicked() {
+                self.project.load_from(Path::new("example-code/led_array"));
+                ui.close_menu();
+            }
+            if ui.add(lcd_screen).clicked() {
+                self.project.load_from(Path::new("example-code/lcd_screen"));
+                ui.close_menu();
+            }
+            if ui.add(traffic_light).clicked() {
+                self.project.load_from(Path::new("example-code/traffic_light"));
+                ui.close_menu();
+            }
         });
 
     }
