@@ -7,5 +7,5 @@ related_crates = ["smart-leds", "ws2812-pio"]
 
 # Each element of the Pinout Vec should be prefaced with [[pinout]]
 [[pinout]]
-pins = ["input", "gnd"]
-interface = { iface_type = "I2C", direction = "Bidirectional" }
+pins = ["pin1", "pin2"]
+interface = { iface_type = "NONE", direction = "Bidirectional" }

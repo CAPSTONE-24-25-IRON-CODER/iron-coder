@@ -10,4 +10,4 @@ bsp = "iron-coder-yellow-led-bsp"
 # Each element of the Pinout Vec should be prefaced with [[pinout]]
 [[pinout]]
 pins = ["cathode", "anode"]
-interface = { iface_type = "I2C", direction = "Bidirectional" }
+interface = { iface_type = "NONE", direction = "Bidirectional" }
