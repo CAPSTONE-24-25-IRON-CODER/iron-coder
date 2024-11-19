@@ -7,6 +7,7 @@ use std::fs;
 use std::vec::Vec;
 use std::fmt;
 use std::cmp;
+use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
 use serde::{Serialize, Deserialize};
@@ -50,6 +51,24 @@ impl fmt::Display for BoardStandards {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub enum BoardType {
+    #[default]
+    Main,
+    Peripheral,
+    Discrete,
+}
+
+impl fmt::Display for BoardType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BoardType::Main => write!(f, "Main"),
+            BoardType::Peripheral => write!(f, "Peripheral"),
+            BoardType::Discrete => write!(f, "Discrete"),
+        }
+    }
+}
+
 /// The board struct defines a board type
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
@@ -59,7 +78,7 @@ pub struct Board {
     /// The board manufacturer
     manufacturer: String,
     /// Whether or not the board has a processor that can run code
-    is_main_board: bool,
+    board_type: BoardType,
     /// A possible form factor that the board adheres to
     standard: Option<BoardStandards>,
     cpu: Option<String>,
@@ -96,7 +115,7 @@ pub struct Board {
 impl fmt::Debug for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Board {}\n", self.name)?;
-        write!(f, "  is main board? {}\n", self.is_main_board)?;
+        write!(f, "  is main board? {}\n", self.is_main_board())?;
         write!(f, "  num examples: {}\n", self.examples.len())?;
         write!(f, "  num required crates: {}\n", self.required_crates.clone().unwrap_or_default().len())?;
         write!(f, "  num related crates: {}\n", self.related_crates.clone().unwrap_or_default().len())?;
@@ -116,6 +135,29 @@ impl cmp::PartialEq for Board {
     }
 }
 impl cmp::Eq for Board {}
+
+/// Boards can be sorted by name and type (main, peripheral, discrete)
+impl PartialOrd<Self> for Board {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl cmp::Ord for Board{
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.is_main_board() && !other.is_main_board() {
+            Ordering::Less
+        } else if !self.is_main_board() && other.is_main_board() {
+            Ordering::Greater
+        } else if self.is_discrete() && !other.is_discrete() {
+            Ordering::Greater
+        } else if !self.is_discrete() && other.is_discrete() {
+            Ordering::Less
+        } else {
+            self.name.cmp(&other.name)
+        }
+    }
+}
 
 /// Boards are uniquely identified by their name, and thus hashable.
 impl Hash for Board {
@@ -186,7 +228,19 @@ impl Board {
     }
 
     pub fn is_main_board(&self) -> bool {
-        self.is_main_board
+        match self.board_type {
+            BoardType::Main => true,
+            BoardType::Peripheral => false,
+            BoardType::Discrete => false,
+        }
+    }
+
+    pub fn is_discrete(&self) -> bool {
+        match self.board_type {
+            BoardType::Main => false,
+            BoardType::Peripheral => false,
+            BoardType::Discrete => true,
+        }
     }
 
     pub fn get_template_dir(&self) -> Option<PathBuf> {

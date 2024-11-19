@@ -1,7 +1,7 @@
 
 name = "Resistor 1000 Ohm"
 manufacturer = "Arduino"
-is_main_board = false
+board_type = "Discrete"
 required_crates = ["embedded-hal", "embedded-time", "panic-halt"]
 related_crates = ["smart-leds", "ws2812-pio"]
 

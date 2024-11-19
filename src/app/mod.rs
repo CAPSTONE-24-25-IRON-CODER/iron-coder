@@ -378,7 +378,7 @@ impl IronCoderApp {
             let mut should_show_boards_window = ctx.data_mut(|data| {
                 data.get_temp_mut_or(id, false).clone()
             });
-            if ui.add(egui::Button::new("Add Board")).clicked() {
+            if ui.add(egui::Button::new("Add Component")).clicked() {
                 ui.close_menu();
                 should_show_boards_window = true;
                 ctx.data_mut(|data| {

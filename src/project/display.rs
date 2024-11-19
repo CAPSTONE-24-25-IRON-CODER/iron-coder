@@ -24,7 +24,7 @@ use crate::app::{Mode, Warnings, Git};
 use enum_iterator;
 
 use serde::{Serialize, Deserialize};
-
+use crate::board::Board;
 use super::system;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -345,8 +345,10 @@ impl Project {
     pub fn display_known_boards(&mut self, ctx: &egui::Context, should_show: &mut bool) -> Option<board::Board> {
 
         let mut board: Option<board::Board> = None;
+        let mut boards: Vec<Board> = self.known_boards.clone();
+        boards.sort();
         // create the window
-        let response = egui::Window::new("Boards")
+        let response = egui::Window::new("Components")
         .open(should_show)
         .collapsible(false)
         .resizable(false)
@@ -361,11 +363,11 @@ impl Project {
             }
             egui::containers::scroll_area::ScrollArea::vertical().show(ui, |ui| {
                 ui.columns(num_cols, |columns| {
-                    for (i, b) in self.known_boards.clone().into_iter().enumerate() {
+                    for (i, b) in boards.into_iter().enumerate() {
                         let col = i % num_cols;
                         // When a board is clicked, add it to the new project
-                        if columns[col].add(board::display::BoardSelectorWidget(b)).clicked() {
-                            board = Some(self.known_boards[i].clone());
+                        if columns[col].add(board::display::BoardSelectorWidget(b.clone())).clicked() {
+                            board = Some(b.clone());
                         }
                         // TODO reb - add button for adding new board not shown
                     }
@@ -680,7 +682,7 @@ impl Project {
         });
         // generate the button
         let tid = icons.get("plus_icon").expect("error fetching plus_icon!").clone();
-        let add_board_button = egui::Button::image_and_text(tid, "add board")
+        let add_board_button = egui::Button::image_and_text(tid, "add component")
             .frame(false);
         let mut cui = ui.child_ui(top_hud_rect, egui::Layout::left_to_right(egui::Align::Center));
         if cui.add(add_board_button).clicked() {
