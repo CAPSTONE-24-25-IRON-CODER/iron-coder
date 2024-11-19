@@ -1,14 +1,15 @@
-name = "LED_Ex"
+name = "LCD_Example"
 location = "example-code/lcd_screen"
-current_view = "FileTree"
+current_view = "BoardsView"
 
 [system]
+discrete_components = []
 connections = []
 
 [system.main_board]
 name = "Feather RP2040"
 manufacturer = "Adafruit"
-is_main_board = true
+board_type = "Main"
 standard = "Feather"
 cpu = "Cortex-M0"
 ram = 264
@@ -41,7 +42,7 @@ direction = "Output"
 [[system.peripheral_boards]]
 name = "OLED Featherwing (128x64)"
 manufacturer = "Adafruit"
-is_main_board = false
+board_type = "Peripheral"
 standard = "Feather"
 bsp = "iron-coder-featherwing-oled-bsp"
 related_crates = ["sh1107"]
