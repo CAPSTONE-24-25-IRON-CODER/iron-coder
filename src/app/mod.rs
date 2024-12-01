@@ -102,6 +102,8 @@ pub struct IronCoderApp {
     warning_flags: Warnings,
     git_things: Git,
     settings: Settings,
+    simulator_open: bool,
+
 }
 
 impl Default for IronCoderApp {
@@ -139,6 +141,7 @@ impl Default for IronCoderApp {
                 colorscheme: colorscheme::INDUSTRIAL_DARK,
                 ui_scale: 1.0,
             },
+            simulator_open: false, 
         }
     }
 }
@@ -170,6 +173,28 @@ impl IronCoderApp {
         }
 
         return app;
+    }
+
+    pub fn open_simulator(&mut self) {
+        self.simulator_open = true; // Assuming you have a `simulator_open` flag
+        info!("Simulator window state set to open.");
+    }
+
+    fn display_simulator_window(&mut self, ctx: &egui::Context) {
+        if self.simulator_open {
+            egui::Window::new("Simulator")
+                .resizable(true)
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    ui.label("Welcome to the Simulator!");
+                    // Add other simulator UI elements here
+
+                    if ui.button("Close Simulator").clicked() {
+                        self.simulator_open = false; // Close the window
+                        info!("Closing simulator window");
+                    }
+                });
+        }
     }
 
     /// Set the colorscheme for the app
@@ -781,6 +806,8 @@ impl eframe::App for IronCoderApp {
         self.unselected_mainboard_warning(ctx);
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
+        self.display_simulator_window(ctx);
+
 
         let save_shortcut = KeyboardShortcut::new(Modifiers::CTRL, Key::S);
         let quit_shortcut = KeyboardShortcut::new(Modifiers::CTRL, Key::Q);

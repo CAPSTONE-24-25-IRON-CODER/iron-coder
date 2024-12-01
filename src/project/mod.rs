@@ -19,6 +19,9 @@ use crate::app::code_editor::CodeEditor;
 pub mod display;
 use display::ProjectViewType;
 
+pub mod simulator;
+
+
 pub mod egui_helpers;
 
 mod system;

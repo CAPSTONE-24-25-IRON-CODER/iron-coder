@@ -1,0 +1,13 @@
+mach create
+machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl
+
+# you have to copy location of .\build\src\STM32F4Template.elf
+
+# sysbus LoadELF -> load the elf
+sysbus LoadELF @..\programs\RustLab\target\thumbv6m-none-eabi\release\RustLab
+
+# open a terminal to display UART data
+showAnalyzer sysbus.usart2
+
+# run our simulation
+start
