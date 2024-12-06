@@ -1,6 +1,6 @@
 name = "Blink_LED"
 location = "example-code/blink_leds"
-current_view = "BoardsView"
+current_view = "FileTree"
 
 [system]
 discrete_components = []
