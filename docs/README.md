@@ -1,4 +1,4 @@
-# Iron Coder Work Done
+# Iron Coder Work Done (Pre-Alpha Build)
   - Updated version of ra_ap_rust-analyzer to 0.0.237 to allow code to build
   - Fixed flagging error when building project by switching to nightly channel
   - Fixed red box bug when dragging elements in the hardware editor
@@ -11,6 +11,8 @@
   - Research examples of possible IronCoder structure (Wokwi, Fritzing, Arduino)
   - Design ideation/wireframing for simulator and debugging modes
   - Iron Coder Forum work done is listed in the [forum repository](https://github.com/CAPSTONE-24-25-IRON-CODER/iron-coder-forum)
+# Iron Coder Work Done (Prototype)
+  - Added Arduino Uno as a main board
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
