@@ -13,6 +13,8 @@
   - Iron Coder Forum work done is listed in the [forum repository](https://github.com/CAPSTONE-24-25-IRON-CODER/iron-coder-forum)
 # Iron Coder Work Done (Prototype)
   - Added Arduino Uno as a main board
+  - Example code feature finished
+  - Added examples to example folder to be loaded within Iron Coder
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
