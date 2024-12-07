@@ -1,0 +1,18 @@
+using sysbus
+
+mach create
+machine LoadPlatformDescription @platforms/boards/stm32f4_discovery.repl
+
+# sysbus LoadELF -> load the elf
+#sysbus LoadELF @..\programs\TestProgram\target\thumbv6m-none-eabi\release\TestProgram
+
+# open a terminal to display UART data
+# showAnalyzer sysbus.uart
+
+ start @scripts/single-node/stm32f4_discovery.resc
+
+# sysbus LoadELF -> load the elf
+#sysbus LoadELF @..\programs\Test\target\thumbv7em-none-eabihf\release\Test
+
+# run our simulation
+start

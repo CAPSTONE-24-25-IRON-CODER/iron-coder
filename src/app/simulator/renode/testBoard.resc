@@ -1,12 +1,26 @@
+:name: STM32F4 Discovery
+:description: This script runs Contiki on STM32F4 Discovery.
+
+using sysbus
+$name?="STM32F4_Discovery"
 mach create
 machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl
 
-# you have to copy location of .\build\src\STM32F4Template.elf
+cpu PerformanceInMips 125
+
+macro reset
+"""
+    sysbus LoadELF @..\programs\Test\target\thumbv7em-none-eabihf\release\Test
+
+"""
+
+runMacro $reset
+
+# start @scripts/single-node/stm32f4_discovery.resc
 
 # sysbus LoadELF -> load the elf
-sysbus LoadELF @..\programs\RustLab\target\thumbv6m-none-eabi\release\RustLab
+#sysbus LoadELF @..\programs\Test\target\thumbv7em-none-eabihf\release\Test
 
-# open a terminal to display UART data
 showAnalyzer sysbus.usart2
 
 # run our simulation
