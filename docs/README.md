@@ -30,12 +30,17 @@
       - Changed name of board menu to component menu
       - Updated headers of each component to display board type (Main, Peripheral, Discrete)
       - Sorted components in the menu by board type and name
-  - Update Board struct to support discrete components as a type
+  - Updated Board struct to support discrete components as a type
       - Created new BoardType enum
       - Change is_main boolean field in Board struct to a BoardType enum
       - Implemented Ord trait for Board (allows us to sort by board type and name)
       - Change internal storage of components by adding a discrete components vector. When a component is added to the hardware editor, it is either added to the peripheral device vector, discrete components vector, or the main board variable.
       - Update .ironcoder TOML files for Example Code hardware editor state to support new discrete component type and vector
+  - Create initial module for serial monitor debugger
+      - Created data struct to contain serial data
+      - Used egui to start testing with plotter
+      - Connected example program to serial monitor console on VSCode
+      - Researched how to connect code variables to serial
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
