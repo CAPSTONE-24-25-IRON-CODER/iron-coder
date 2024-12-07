@@ -12,9 +12,30 @@
   - Design ideation/wireframing for simulator and debugging modes
   - Iron Coder Forum work done is listed in the [forum repository](https://github.com/CAPSTONE-24-25-IRON-CODER/iron-coder-forum)
 # Iron Coder Work Done (Prototype)
-  - Added Arduino Uno as a main board
+  - Gained a better understanding of the process for creating new components by adding various components through creating TOML files and SVG files
+    - Added Arduino Uno as a main board
+    - Added Adafruit's 8x8 NeoPixel as a peripheral board
+    - Added an 1000 Ω Resistor
+    - Added a Yellow LED
+    - Added a push button
+    - Added a piezo buzzer
+  - Support the ability to run Rust code on the Arduino Uno
   - Example code feature finished
-  - Added examples to example folder to be loaded within Iron Coder
+  - Added Rust Examples to example folder to be loaded within Iron Coder
+      - Alarm Clock Example (Arduino Uno)
+      - LCD Screen Example
+      - Blink LED Example
+      - LED Array Example
+  - Updated board menu
+      - Changed name of board menu to component menu
+      - Updated headers of each component to display board type (Main, Peripheral, Discrete)
+      - Sorted components in the menu by board type and name
+  - Update Board struct to support discrete components as a type
+      - Created new BoardType enum
+      - Change is_main boolean field in Board struct to a BoardType enum
+      - Implemented Ord trait for Board (allows us to sort by board type and name)
+      - Change internal storage of components by adding a discrete components vector. When a component is added to the hardware editor, it is either added to the peripheral device vector, discrete components vector, or the main board variable.
+      - Update .ironcoder TOML files for Example Code hardware editor state to support new discrete component type and vector
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
@@ -23,5 +44,6 @@ parameters that are needed to describe the boards and work within the hardware e
 # Known bugs
   - Window stays open after loading example, need research into egui to figure out how to close after clicking example
   - Sometimes drawn wire connections will appear on top of the add board menu
+  - More than one discrete component cannot be added to the hardware editor
     
 
