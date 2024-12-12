@@ -41,6 +41,12 @@
       - Used egui to start testing with plotter
       - Connected example program to serial monitor console on VSCode
       - Researched how to connect code variables to serial
+  - Can run Rust programs on Renode supported boards
+      - Created an example program to utilize USART on STM32F4 Discovery board
+      - Made a Renode script to load board and program .elf file
+      - Researched information on how to support new boards such as the AdaFruit Feather RP2040
+      - Planned a path to support the AdaFruit Feather RP2040 by production
+
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
@@ -50,5 +56,5 @@ parameters that are needed to describe the boards and work within the hardware e
   - Window stays open after loading example, need research into egui to figure out how to close after clicking example
   - Sometimes drawn wire connections will appear on top of the add board menu
   - More than one discrete component cannot be added to the hardware editor
-    
+  - Rx pin in STM32 board example does not work properly so we can only output data
 
