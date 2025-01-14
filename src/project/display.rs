@@ -4,7 +4,7 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Key, Response, Widget};
+use egui::{Key, Response, Vec2, Widget};
 use egui_extras::RetainedImage;
 use log::{info, warn};
 use std::collections::HashMap;
@@ -343,7 +343,10 @@ impl Project {
 
     /// Display the list of available boards in a window, and return one if it was clicked
     pub fn display_known_boards(&mut self, ctx: &egui::Context, should_show: &mut bool) -> Option<board::Board> {
-
+        let id = egui::Id::new("show_generate_boards");
+        let mut should_show_generate_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(id, false).clone()
+        });
         let mut board: Option<board::Board> = None;
         let mut boards: Vec<Board> = self.known_boards.clone();
         boards.sort();
@@ -369,7 +372,14 @@ impl Project {
                         if columns[col].add(board::display::BoardSelectorWidget(b.clone())).clicked() {
                             board = Some(b.clone());
                         }
-                        // TODO reb - add button for adding new board not shown
+                    }
+
+                    let last_col = self.known_boards.len();
+                    if columns[last_col % num_cols].add(Button::new("Generate New Board").min_size(Vec2::new(60.0, 45.0))).clicked() {
+                        should_show_generate_board_window = true;
+                        ctx.data_mut(|data| {
+                            data.insert_temp(id, should_show_generate_board_window);
+                        });
                     }
                 });
             });
@@ -385,8 +395,22 @@ impl Project {
     }
 
     // TODO reb - implement display_generate_new_board
-    pub fn display_generate_new_board(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+        let response = egui::Window::new("Generate TOML File")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
+            .show(ctx, |ui| {
+                //TODO create TOML file generation form here
+                ui.label("Hello!");
+        });
 
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
     }
     // TODO reb - implement display_image_uploader
     pub fn display_image_uploader(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -535,30 +559,6 @@ impl Project {
             let board_response = response.response;
             let pin_response = response.inner;
 
-            /* Actions for board-level stuff - red box bug
-            board_response.context_menu(|ui| {
-                ui.menu_button("pinout info", |ui| {
-                    for po in board.get_pinout().iter() {
-                        let label = format!("{:?}", po);
-                        if ui.button(label).clicked() {
-                            info!("No action coded for this yet.");
-                        }
-                    }
-                });
-                ui.menu_button("rust-analyser stuff", |ui| {
-                    for s in board.ra_values.iter() {
-                        if ui.label(format!("{:?}", s.label)).clicked() {
-                            info!("{:?}", s);
-                        }
-                    }
-                });
-                if ui.button("remove board from system").clicked() {
-                    self.system.remove_board(board.clone()).unwrap_or_else(|_| {
-                        warn!("error removing board from system.");
-                    });
-                }
-            }); */
-
             // Actions for pin-level stuff
             if let Some(pin) = pin_response {
                 info!("pin {} clicked!", pin);
@@ -675,9 +675,9 @@ impl Project {
         }).response.rect;
 
         // Show the know boards list, if needed
-        let id = egui::Id::new("show_known_boards");
+        let known_board_id = egui::Id::new("show_known_boards");
         let mut should_show_boards_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(id, false).clone()
+            data.get_temp_mut_or(known_board_id, false).clone()
 
         });
         // generate the button
@@ -692,7 +692,17 @@ impl Project {
             self.add_board(b);
         }
         ctx.data_mut(|data| {
-            data.insert_temp(id, should_show_boards_window);
+            data.insert_temp(known_board_id, should_show_boards_window);
+        });
+
+        // Show the generate boards window, if needed
+        let generate_boards_id = egui::Id::new("show_generate_boards");
+        let mut should_show_generate_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(generate_boards_id, false).clone()
+        });
+        self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
+        ctx.data_mut(|data| {
+            data.insert_temp(generate_boards_id, should_show_generate_board_window);
         });
 
         // let location_text = self.get_location();
