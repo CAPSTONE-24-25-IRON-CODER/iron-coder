@@ -404,8 +404,7 @@ impl Project {
             .movable(false)
             .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
             .show(ctx, |ui| {
-                //TODO create TOML file generation form here
-                ui.label("Hello! Press X to cancel");
+                ui.label("Fill out all fields. Press X to cancel");
 
                 let mut board_toml_info = ctx.data_mut(|data| {
                     data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
@@ -419,6 +418,7 @@ impl Project {
 
                 ui.horizontal(|ui| {
                     if ui.button("Next").clicked() {
+                        // TODO reb - input validation and move to next screen
                         /* … */
                     }
                 });
