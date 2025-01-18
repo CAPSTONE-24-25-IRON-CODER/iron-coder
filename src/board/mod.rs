@@ -9,7 +9,7 @@ use std::fmt;
 use std::cmp;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
-
+use egui::{Button, Vec2};
 use serde::{Serialize, Deserialize};
 
 use ra_ap_ide;
@@ -26,6 +26,7 @@ pub mod parsing;
 mod test;
 
 use parsing::BspParseInfo;
+use crate::board::pinout::{InterfaceDirection, InterfaceType};
 
 /// These are the various standard development board form factors
 #[non_exhaustive]
@@ -370,11 +371,94 @@ impl BoardTomlInfo {
             ui.add(egui::Slider::new(&mut self.ram, 0..=4000));
         });
 
-        // TODO reb - add required crates
+        ui.horizontal(|ui| {
+            if self.required_crates.is_empty() {
+                self.required_crates.push("".parse().unwrap());
+            }
+            ui.label("Required Crates:");
 
-        // TODO reb - add related crates
+            ui.vertical(|ui| {
+                let mut n : usize = 0;
+                while n < self.required_crates.len() {
+                    ui.horizontal(|ui| {
+                        egui::TextEdit::singleline(&mut self.required_crates[n])
+                            .hint_text("Enter here").show(ui);
+                        if self.required_crates.len() != 1 {
+                            if ui.button("Delete Crate").clicked() {
+                                self.required_crates.remove(n);
+                                if n != 0 {
+                                    n = n - 1;
+                                }
+                            }
+                        }
+                    });
+                    if n == self.required_crates.len() -1 && ui.button("Add Required Crate").clicked() {
+                        self.required_crates.push("".parse().unwrap());
+                        break;
+                    }
+                    n = n + 1;
+                }
+            });
+        });
 
-        // TODO reb - add pinout info
+        ui.horizontal(|ui| {
+            if self.related_crates.is_empty() {
+                self.related_crates.push("".parse().unwrap());
+            }
+            ui.label("Related Crates:");
+
+            ui.vertical(|ui| {
+                let mut n : usize = 0;
+                while n < self.related_crates.len() {
+                    ui.horizontal(|ui| {
+                        egui::TextEdit::singleline(&mut self.related_crates[n])
+                            .hint_text("Enter here").show(ui);
+                        if self.related_crates.len() != 1 {
+                            if ui.button("Delete Crate").clicked() {
+                                self.related_crates.remove(n);
+                                if n != 0 {
+                                    n = n - 1;
+                                }
+                            }
+                        }
+                    });
+                    if n == self.related_crates.len() -1 && ui.button("Add Related Crate").clicked() {
+                        self.related_crates.push("".parse().unwrap());
+                        break;
+                    }
+                    n = n + 1;
+                }
+            });
+        });
+
+        ui.horizontal(|ui| {
+            if self.pinouts.is_empty() {
+                self.pinouts.push(PinoutTomlInfo::default());
+            }
+            ui.label("PINOUTS");
+
+            ui.vertical(|ui| {
+                let mut n : usize = 0;
+                while n < self.pinouts.len() {
+                    ui.horizontal(|ui| {
+                        PinoutTomlInfo::update_form_UI(&mut self.pinouts[n], ctx, ui);
+                        if self.pinouts.len() != 1 {
+                            if ui.add(Button::new("Delete Pinout").min_size(Vec2::new(20.0, 50.0 + (25 * self.pinouts[n].pins.len()) as f32))).clicked() {
+                                self.pinouts.remove(n);
+                                if n != 0 {
+                                    n = n - 1;
+                                }
+                            }
+                        }
+                    });
+                    if n == self.pinouts.len() -1 && ui.button("Add Pinout").clicked() {
+                        self.pinouts.push(PinoutTomlInfo::default());
+                        break;
+                    }
+                    n = n + 1;
+                }
+            });
+        });
     }
     pub fn generate_toml(&self, file_path: &Path) -> () {
         // TODO Generate toml file in relevant directory
@@ -390,6 +474,61 @@ impl BoardTomlInfo {
 #[derive(Default, Clone)]
 pub struct PinoutTomlInfo {
     pub pins : Vec<String>,
-    pub iface_type : String,
-    pub direction : String,
+    pub iface_type : InterfaceType,
+    pub direction : InterfaceDirection,
+}
+
+impl PinoutTomlInfo {
+    pub fn update_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui){
+
+        ui.horizontal(|ui| {
+            if self.pins.is_empty() {
+                self.pins.push("".parse().unwrap());
+            }
+            ui.label("Pin Names:");
+
+            ui.vertical(|ui| {
+                let mut n : usize = 0;
+                while n < self.pins.len() {
+                    ui.horizontal(|ui| {
+                        egui::TextEdit::singleline(&mut self.pins[n])
+                            .hint_text("Enter here").show(ui);
+                        if self.pins.len() != 1 {
+                            if ui.button("Delete Pin").clicked() {
+                                self.pins.remove(n);
+                                if n != 0 {
+                                    n = n - 1;
+                                }
+                            }
+                        }
+                    });
+                    if n == self.pins.len() -1 && ui.button("Add Pin").clicked() {
+                        self.pins.push("".parse().unwrap());
+                        break;
+                    }
+                    n = n + 1;
+                }
+
+                ui.horizontal(|ui | {
+                    ui.label("Select Interface Type:");
+                    ui.selectable_value(&mut self.iface_type, InterfaceType::NONE, "None");
+                    ui.selectable_value(&mut self.iface_type, InterfaceType::GPIO, "GPIO");
+                    ui.selectable_value(&mut self.iface_type, InterfaceType::ADC, "ADC");
+                    ui.selectable_value(&mut self.iface_type, InterfaceType::PWM, "PWM");
+                    ui.selectable_value(&mut self.iface_type, InterfaceType::UART, "UART");
+                    ui.selectable_value(&mut self.iface_type, InterfaceType::I2C, "I2C");
+                    ui.selectable_value(&mut self.iface_type, InterfaceType::SPI, "SPI");
+                });
+
+                ui.horizontal(|ui | {
+                    ui.label("Select Direction:");
+                    ui.selectable_value(&mut self.direction, InterfaceDirection::Unknown, "Unknown");
+                    ui.selectable_value(&mut self.direction, InterfaceDirection::Input, "Input");
+                    ui.selectable_value(&mut self.direction, InterfaceDirection::Output, "Output");
+                    ui.selectable_value(&mut self.direction, InterfaceDirection::Bidirectional, "Bidirectional");
+                });
+            });
+        });
+
+    }
 }
