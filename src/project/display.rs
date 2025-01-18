@@ -4,7 +4,7 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Key, Response, Vec2, Widget};
+use egui::{Key, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
 use log::{info, warn};
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ use crate::app::{Mode, Warnings, Git};
 use enum_iterator;
 
 use serde::{Serialize, Deserialize};
-use crate::board::Board;
+use crate::board::{Board, BoardTomlInfo};
 use super::system;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -396,6 +396,7 @@ impl Project {
 
     // TODO reb - implement display_generate_new_board
     pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+        let board_toml_info_id = egui::Id::new("board_toml_info");
         let response = egui::Window::new("Generate TOML File")
             .open(should_show)
             .collapsible(false)
@@ -404,14 +405,37 @@ impl Project {
             .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
             .show(ctx, |ui| {
                 //TODO create TOML file generation form here
-                ui.label("Hello!");
+                ui.label("Hello! Press X to cancel");
+
+                let mut board_toml_info = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+                });
+
+                BoardTomlInfo::update_form_UI(&mut board_toml_info, ctx, ui);
+
+                ctx.data_mut(|data| {
+                    data.insert_temp(board_toml_info_id, board_toml_info);
+                });
+
+                ui.horizontal(|ui| {
+                    if ui.button("Next").clicked() {
+                        /* … */
+                    }
+                });
         });
 
         if response.is_some() {
             // unwrap ok here because we check that response is Some.
             ctx.move_to_top(response.unwrap().response.layer_id);
         }
+
+        if !*should_show {
+            ctx.data_mut(|data| {
+                data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
+            });
+        }
     }
+
     // TODO reb - implement display_image_uploader
     pub fn display_image_uploader(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
 

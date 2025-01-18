@@ -51,7 +51,7 @@ impl fmt::Display for BoardStandards {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub enum BoardType {
     #[default]
     Main,
@@ -307,4 +307,89 @@ pub fn get_boards(boards_dir: &Path) -> Vec<Board> {
         }
     }
     return r;
+}
+
+/// A struct that holds the decoded toml information for new board generation
+#[derive(Default, Clone)]
+pub struct BoardTomlInfo {
+    pub name : String,
+    pub manufacturer : String,
+    pub is_main_board : BoardType,
+    pub standard : String,
+    pub cpu : String,
+    pub ram : i32,
+    pub flash : i32,
+    pub required_crates : Vec<String>,
+    pub related_crates : Vec<String>,
+
+    pub bsp : String,
+
+    pub pinouts : Vec<PinoutTomlInfo>,
+}
+
+impl BoardTomlInfo {
+    pub fn update_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Board Name:");
+            egui::TextEdit::singleline(&mut self.name)
+                .hint_text("Enter here").show(ui);
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Manufacturer:");
+            egui::TextEdit::singleline(&mut self.manufacturer)
+                .hint_text("Enter here").show(ui);
+        });
+
+        ui.horizontal(|ui | {
+            ui.label("Select Board Type:");
+            ui.selectable_value(&mut self.is_main_board, BoardType::Main, "Main");
+            ui.selectable_value(&mut self.is_main_board, BoardType::Peripheral, "Peripheral");
+            ui.selectable_value(&mut self.is_main_board, BoardType::Discrete, "Discrete");
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Standard:");
+            egui::TextEdit::singleline(&mut self.standard)
+                .hint_text("Enter here").show(ui);
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("CPU:");
+            egui::TextEdit::singleline(&mut self.cpu)
+                .hint_text("Enter here").show(ui);
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Flash (kb):");
+            ui.add(egui::Slider::new(&mut self.flash, 0..=8000));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("RAM (kb):");
+            ui.add(egui::Slider::new(&mut self.ram, 0..=4000));
+        });
+
+        // TODO reb - add required crates
+
+        // TODO reb - add related crates
+
+        // TODO reb - add pinout info
+    }
+    pub fn generate_toml(&self, file_path: &Path) -> () {
+        // TODO Generate toml file in relevant directory
+
+    }
+
+    pub fn cleanup(&self, file_path: &Path) -> () {
+        // TODO Delete files if necessary
+    }
+}
+
+/// A struct that holds the decoded pinout information for creating board toml file
+#[derive(Default, Clone)]
+pub struct PinoutTomlInfo {
+    pub pins : Vec<String>,
+    pub iface_type : String,
+    pub direction : String,
 }
