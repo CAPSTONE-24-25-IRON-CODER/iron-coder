@@ -351,8 +351,16 @@ impl BoardTomlInfo {
 
         ui.horizontal(|ui| {
             ui.label("Standard:");
-            egui::TextEdit::singleline(&mut self.standard)
-                .hint_text("Enter here").show(ui);
+            if self.is_main_board == BoardType::Discrete {
+                self.standard = "Components".parse().unwrap();
+                ui.selectable_value(&mut self.standard, "Components".parse().unwrap(), "Components");
+            } else {
+                ui.selectable_value(&mut self.standard, BoardStandards::Arduino.to_string(), "Arduino");
+                ui.selectable_value(&mut self.standard, BoardStandards::RaspberryPi.to_string(), "RaspberryPi");
+                ui.selectable_value(&mut self.standard, BoardStandards::Feather.to_string(), "Feather");
+                ui.selectable_value(&mut self.standard, BoardStandards::ThingPlus.to_string(), "ThingPlus");
+                ui.selectable_value(&mut self.standard, BoardStandards::MicroMod.to_string(), "MicroMod");
+            }
         });
 
         ui.horizontal(|ui| {
