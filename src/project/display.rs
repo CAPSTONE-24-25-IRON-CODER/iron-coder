@@ -4,16 +4,16 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Key, Response, TextBuffer, Vec2, Widget};
+use egui::{Color32, Key, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
 use log::{info, warn};
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::widget_text::RichText;
 use egui::widgets::Button;
-
 use git2::{Repository, StatusOptions};
 
 use crate::board;
@@ -22,9 +22,10 @@ use crate::app::icons::IconSet;
 use crate::app::{Mode, Warnings, Git};
 
 use enum_iterator;
-
+use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
 use crate::board::{Board, BoardTomlInfo};
+use crate::board::svg_reader::SvgBoardInfo;
 use super::system;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -394,7 +395,6 @@ impl Project {
 
     }
 
-    // TODO reb - implement display_generate_new_board
     pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
         let response = egui::Window::new("Generate TOML File")
@@ -418,8 +418,23 @@ impl Project {
 
                 ui.horizontal(|ui| {
                     if ui.button("Next").clicked() {
-                        // TODO reb - input validation and move to next screen
-                        /* … */
+                        // TODO reb - input validation before move to next screen
+                        if let Some(svg_file_path) = FileDialog::new()
+                            .set_title("Select Image File for Board (must be .svg file)")
+                            .add_filter("SVG Filter", &["svg"])
+                            .pick_file()
+                        {
+                            let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
+                            let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+
+                            ctx.data_mut(|data| {
+                                data.insert_temp(new_board_svg_path_id, svg_file_path);
+                            });
+
+                            ctx.data_mut(|data| {
+                                data.insert_temp(should_show_new_board_image_id, true);
+                            });
+                        }
                     }
                 });
         });
@@ -436,13 +451,73 @@ impl Project {
         }
     }
 
-    // TODO reb - implement display_image_uploader
-    pub fn display_image_uploader(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    // TODO reb - implement save_new_board_info
+    pub fn save_new_board_info(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let board_toml_info_id = egui::Id::new("board_toml_info");
+        let mut board_toml_info = ctx.data_mut(|data| {
+            data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+        });
+        // TODO reb - generate TOML file
 
+        // TODO reb - code for copying SVG file to new created directory
+        // let mut new_board_dir = Path::new("./iron-coder-boards");
+        // let mut board_name_trim : String = String::from(board_toml_info.name.trim());
+        // let mut board_name_folder = board_name_trim.replace(" ", "_");
+        //
+        // new_board_dir = &*new_board_dir.join(board_toml_info.standard.clone());
+        // new_board_dir = &*new_board_dir.join(board_name_folder.clone());
+        //
+        // board_name_folder.to_lowercase().push_str(".svg");
+        // new_board_dir = &*new_board_dir.join(board_name_folder);
+        //
+        // fs::copy(svg_file_path, new_board_dir).expect("File could not be copied");
     }
+
     // TODO reb - implement display_board_png
-    pub fn display_board_png(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        // TODO Include fuctionality for user to draw circles
+    pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+        // TODO reb Include fuctionality for user to draw circles
+        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let response = egui::Window::new("Designate Pinouts")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::RIGHT_BOTTOM, [0.0, 0.0])
+            .show(ctx, |ui| {
+                let svg_path  = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
+                });
+                let mut b = Board::default();
+
+                match SvgBoardInfo::from_path(svg_path.as_ref()) {
+
+                    Ok(svg_board_info) => {
+                        info!("successfully decoded SVG for board. Board has physical size:");
+                        b.svg_board_info = Some(svg_board_info);
+                        let retained_image = RetainedImage::from_color_image(
+                            "pic",
+                            b.clone().svg_board_info.unwrap().image,
+                        );
+
+                        let display_size = b.svg_board_info.unwrap().physical_size * 25.0;
+
+                        let image_rect = retained_image.show_max_size(ui, display_size).rect;
+
+                        ui.allocate_rect(image_rect, egui::Sense::hover());
+                    },
+                    Err(e) => {
+                        // TODO reb error handling here
+                        warn!("error with svg parsing! {:?}", e);
+                        ui.label("Error with SVG Parsing. Pick a different file");
+                    },
+                };
+
+            });
+
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
     }
 
 
@@ -719,6 +794,8 @@ impl Project {
             data.insert_temp(known_board_id, should_show_boards_window);
         });
 
+        // AUTO GENERATE BOARDS WINDOWS
+
         // Show the generate boards window, if needed
         let generate_boards_id = egui::Id::new("show_generate_boards");
         let mut should_show_generate_board_window = ctx.data_mut(|data| {
@@ -727,6 +804,17 @@ impl Project {
         self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
         ctx.data_mut(|data| {
             data.insert_temp(generate_boards_id, should_show_generate_board_window);
+        });
+
+        // Show the new board window for adding pinouts, if needed
+        let new_board_image_id = egui::Id::new("should_show_new_board_image");
+        let mut should_show_new_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_image_id, false).clone()
+        });
+
+        self.display_new_board_png(ctx, &mut should_show_new_board_window);
+        ctx.data_mut(|data| {
+            data.insert_temp(new_board_image_id, should_show_new_board_window);
         });
 
         // let location_text = self.get_location();

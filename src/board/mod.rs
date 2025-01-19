@@ -14,7 +14,7 @@ use serde::{Serialize, Deserialize};
 
 use ra_ap_ide;
 
-mod svg_reader;
+pub mod svg_reader;
 use svg_reader::SvgBoardInfo;
 
 pub mod display;
