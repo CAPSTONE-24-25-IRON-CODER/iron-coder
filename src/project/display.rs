@@ -473,7 +473,6 @@ impl Project {
         // fs::copy(svg_file_path, new_board_dir).expect("File could not be copied");
     }
 
-    // TODO reb - implement display_board_png
     pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         // TODO reb Include fuctionality for user to draw circles
 
