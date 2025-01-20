@@ -476,6 +476,7 @@ impl Project {
     // TODO reb - implement display_board_png
     pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         // TODO reb Include fuctionality for user to draw circles
+
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
         let mut done = false;
         let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
@@ -485,6 +486,7 @@ impl Project {
             .movable(false)
             .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
             .show(ctx, |ui| {
+
                 let svg_path  = ctx.data_mut(|data| {
                     data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
                 });
@@ -844,6 +846,12 @@ impl Project {
         let mut should_show_new_board_window = ctx.data_mut(|data| {
             data.get_temp_mut_or(new_board_image_id, false).clone()
         });
+
+        if should_show_new_board_window {
+            ctx.data_mut(|data| {
+                data.insert_temp(generate_boards_id, false);
+            });
+        }
 
         self.display_new_board_png(ctx, &mut should_show_new_board_window);
         ctx.data_mut(|data| {
