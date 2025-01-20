@@ -477,12 +477,13 @@ impl Project {
     pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         // TODO reb Include fuctionality for user to draw circles
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let mut done = false;
         let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
             .open(should_show)
             .collapsible(false)
             .resizable(false)
             .movable(false)
-            .anchor(egui::Align2::RIGHT_BOTTOM, [0.0, 0.0])
+            .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
             .show(ctx, |ui| {
                 let svg_path  = ctx.data_mut(|data| {
                     data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
@@ -508,6 +509,17 @@ impl Project {
                         ui.horizontal(|ui| {
                             if ui.button("Done").clicked() {
                                 self.save_new_board_info(ctx, ui);
+
+                                let board_toml_info_id = egui::Id::new("board_toml_info");
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
+                                });
+
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_svg_path_id, PathBuf::new().clone());
+                                });
+
+                                done = true;
                             }
                         });
                     },
@@ -521,8 +533,6 @@ impl Project {
                                 .add_filter("SVG Filter", &["svg"])
                                 .pick_file()
                             {
-                                let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
-
                                 ctx.data_mut(|data| {
                                     data.insert_temp(new_board_svg_path_id, svg_file_path);
                                 });
@@ -536,6 +546,10 @@ impl Project {
         if response.is_some() {
             // unwrap ok here because we check that response is Some.
             ctx.move_to_top(response.unwrap().response.layer_id);
+        }
+
+        if done {
+            *should_show = false;
         }
     }
 
