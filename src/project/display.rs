@@ -477,7 +477,7 @@ impl Project {
     pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         // TODO reb Include fuctionality for user to draw circles
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
-        let response = egui::Window::new("Designate Pinouts")
+        let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
             .open(should_show)
             .collapsible(false)
             .resizable(false)
@@ -504,11 +504,30 @@ impl Project {
                         let image_rect = retained_image.show_max_size(ui, display_size).rect;
 
                         ui.allocate_rect(image_rect, egui::Sense::hover());
+
+                        ui.horizontal(|ui| {
+                            if ui.button("Done").clicked() {
+                                self.save_new_board_info(ctx, ui);
+                            }
+                        });
                     },
                     Err(e) => {
                         // TODO reb error handling here
                         warn!("error with svg parsing! {:?}", e);
-                        ui.label("Error with SVG Parsing. Pick a different file");
+                        ui.label("Error with SVG parsing");
+                        if ui.button("Pick a different file").clicked() {
+                            if let Some(svg_file_path) = FileDialog::new()
+                                .set_title("Select Image File for Board (must be .svg file)")
+                                .add_filter("SVG Filter", &["svg"])
+                                .pick_file()
+                            {
+                                let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_svg_path_id, svg_file_path);
+                                });
+                            }
+                        }
                     },
                 };
 
