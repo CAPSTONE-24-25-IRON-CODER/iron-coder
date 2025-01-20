@@ -510,16 +510,6 @@ impl Project {
                         ui.horizontal(|ui| {
                             if ui.button("Done").clicked() {
                                 self.save_new_board_info(ctx, ui);
-
-                                let board_toml_info_id = egui::Id::new("board_toml_info");
-                                ctx.data_mut(|data| {
-                                    data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
-                                });
-
-                                ctx.data_mut(|data| {
-                                    data.insert_temp(new_board_svg_path_id, PathBuf::new().clone());
-                                });
-
                                 done = true;
                             }
                         });
@@ -551,6 +541,17 @@ impl Project {
 
         if done {
             *should_show = false;
+        }
+
+        if !*should_show {
+            let board_toml_info_id = egui::Id::new("board_toml_info");
+            ctx.data_mut(|data| {
+                data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(new_board_svg_path_id, PathBuf::new().clone());
+            });
         }
     }
 
@@ -835,7 +836,9 @@ impl Project {
         let mut should_show_generate_board_window = ctx.data_mut(|data| {
             data.get_temp_mut_or(generate_boards_id, false).clone()
         });
-        self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
+        if should_show_generate_board_window {
+            self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
+        }
         ctx.data_mut(|data| {
             data.insert_temp(generate_boards_id, should_show_generate_board_window);
         });
@@ -850,9 +853,8 @@ impl Project {
             ctx.data_mut(|data| {
                 data.insert_temp(generate_boards_id, false);
             });
+            self.display_new_board_png(ctx, &mut should_show_new_board_window);
         }
-
-        self.display_new_board_png(ctx, &mut should_show_new_board_window);
         ctx.data_mut(|data| {
             data.insert_temp(new_board_image_id, should_show_new_board_window);
         });
