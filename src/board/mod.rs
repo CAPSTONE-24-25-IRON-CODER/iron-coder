@@ -8,8 +8,9 @@ use std::vec::Vec;
 use std::fmt;
 use std::cmp;
 use std::cmp::Ordering;
+use std::fmt::Display;
 use std::hash::{Hash, Hasher};
-use egui::{Button, Vec2};
+use egui::{Button, TextBuffer, Vec2};
 use serde::{Serialize, Deserialize};
 
 use ra_ap_ide;
@@ -315,7 +316,7 @@ pub fn get_boards(boards_dir: &Path) -> Vec<Board> {
 pub struct BoardTomlInfo {
     pub name : String,
     pub manufacturer : String,
-    pub is_main_board : BoardType,
+    pub board_type : BoardType,
     pub standard : String,
     pub cpu : String,
     pub ram : i32,
@@ -329,6 +330,70 @@ pub struct BoardTomlInfo {
 }
 
 impl BoardTomlInfo {
+    pub fn get_name(&self) -> String { String::from("name = \"") + self.name.as_str() + "\"\n" }
+
+    pub fn get_manufacturer(&self) -> String { String::from("manufacturer = \"") + self.manufacturer.as_str() + "\"\n" }
+
+    pub fn get_board_type(&self) -> String { String::from("board_type = \"") + self.board_type.to_string().as_str() + "\"\n" }
+
+    pub fn get_standard(&self) -> String { String::from("standard = \"") + self.standard.as_str() + "\"\n" }
+
+    pub fn get_cpu(&self) -> String { String::from("cpu = \"") + self.cpu.as_str() + "\"\n" }
+
+    pub fn get_ram(&self) -> String { String::from("ram = ") + self.ram.to_string().as_str() + "\n" }
+
+    pub fn get_flash(&self) -> String { String::from("flash = ") + self.flash.to_string().as_str() + "\n" }
+
+    pub fn get_required_crates(&self) -> String {
+        let mut required_string : String = String::from("required_crates = [");
+
+        for req_crate in &self.required_crates {
+            required_string =  required_string + String::from("\"").as_str() + req_crate.as_str() + "\", ";
+        }
+
+        if !self.required_crates.is_empty() {
+            required_string.pop();
+            required_string.pop();
+        }
+
+        required_string =  required_string + String::from("]\n").as_str();
+
+
+        required_string
+    }
+
+    pub fn get_related_crates(&self) -> String {
+        let mut related_string : String = String::from("related_crates = [");
+
+        for rel_crate in &self.related_crates {
+            related_string =  related_string + String::from("\"").as_str() + rel_crate.as_str() + "\", ";
+        }
+
+        if !self.related_crates.is_empty() {
+            related_string.pop();
+            related_string.pop();
+        }
+
+        related_string =  related_string + String::from("]\n\n").as_str();
+
+
+        related_string
+    }
+
+    pub fn get_bsp(&self) -> String { String::from("bsp = \"iron-coder-") + self.name.replace(" ", "-").as_str() + "-bsp\"\n\n"}
+
+    pub fn get_pinouts(&self) -> String {
+        let mut pinout_str :String = String::from("");
+
+        for pinout in &self.pinouts {
+            pinout_str = pinout_str + String::from("[[pinout]]\n").as_str();
+            pinout_str = pinout_str + pinout.get_pins().as_str();
+            pinout_str = pinout_str + pinout.get_interface().as_str();
+        }
+
+        pinout_str
+    }
+
     pub fn update_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("Board Name:");
@@ -344,14 +409,14 @@ impl BoardTomlInfo {
 
         ui.horizontal(|ui | {
             ui.label("Select Board Type:");
-            ui.selectable_value(&mut self.is_main_board, BoardType::Main, "Main");
-            ui.selectable_value(&mut self.is_main_board, BoardType::Peripheral, "Peripheral");
-            ui.selectable_value(&mut self.is_main_board, BoardType::Discrete, "Discrete");
+            ui.selectable_value(&mut self.board_type, BoardType::Main, "Main");
+            ui.selectable_value(&mut self.board_type, BoardType::Peripheral, "Peripheral");
+            ui.selectable_value(&mut self.board_type, BoardType::Discrete, "Discrete");
         });
 
         ui.horizontal(|ui| {
             ui.label("Standard:");
-            if self.is_main_board == BoardType::Discrete {
+            if self.board_type == BoardType::Discrete {
                 self.standard = "Components".parse().unwrap();
                 ui.selectable_value(&mut self.standard, "Components".parse().unwrap(), "Components");
             } else {
@@ -468,9 +533,13 @@ impl BoardTomlInfo {
             });
         });
     }
-    pub fn generate_toml(&self, file_path: &Path) -> () {
-        // TODO reb Generate toml file in relevant directory
 
+    pub fn generate_toml_string(&self) -> String {
+        self.get_name() + self.get_manufacturer().as_str() + self.get_board_type().as_str()
+            + self.get_standard().as_str() + self.get_cpu().as_str() + self.get_ram().as_str()
+            + self.get_flash().as_str() + self.get_required_crates().as_str()
+            + self.get_related_crates().as_str() + self.get_bsp().as_str()
+            + self.get_pinouts().as_str()
     }
 
     pub fn cleanup(&self, file_path: &Path) -> () {
@@ -487,6 +556,33 @@ pub struct PinoutTomlInfo {
 }
 
 impl PinoutTomlInfo {
+    pub fn get_pins(&self) -> String {
+        let mut pins_str = String::from("pins = [");
+        for pin in &self.pins{
+            pins_str = pins_str + "\"" + pin.as_str() + "\", ";
+        }
+
+        if !self.pins.is_empty(){
+            pins_str.pop();
+            pins_str.pop();
+        }
+
+        pins_str = pins_str + "]\n";
+
+        pins_str
+    }
+
+    pub fn get_interface(&self) -> String {
+        let mut interface_str = String::from("interface = { iface_type = \"");
+
+        interface_str = interface_str + self.iface_type.to_string().as_str() + "\", direction = \"";
+        interface_str = interface_str + self.direction.to_string().as_str() + "\" }\n\n";
+
+        interface_str
+    }
+
+
+
     pub fn update_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui){
 
         ui.horizontal(|ui| {

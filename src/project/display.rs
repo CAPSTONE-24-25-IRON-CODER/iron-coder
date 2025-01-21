@@ -454,23 +454,34 @@ impl Project {
     // TODO reb - implement save_new_board_info
     pub fn save_new_board_info(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
+        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
         let mut board_toml_info = ctx.data_mut(|data| {
             data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
         });
-        // TODO reb - generate TOML file
+        let svg_file_path  = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
+        });
 
-        // TODO reb - code for copying SVG file to new created directory
-        // let mut new_board_dir = Path::new("./iron-coder-boards");
-        // let mut board_name_trim : String = String::from(board_toml_info.name.trim());
-        // let mut board_name_folder = board_name_trim.replace(" ", "_");
-        //
-        // new_board_dir = &*new_board_dir.join(board_toml_info.standard.clone());
-        // new_board_dir = &*new_board_dir.join(board_name_folder.clone());
-        //
-        // board_name_folder.to_lowercase().push_str(".svg");
-        // new_board_dir = &*new_board_dir.join(board_name_folder);
-        //
-        // fs::copy(svg_file_path, new_board_dir).expect("File could not be copied");
+
+        let mut new_board_file_path = Path::new("./iron-coder-boards");
+        let board_name_folder = String::from(board_toml_info.name.trim().replace(" ", "_"));
+        let board_name_toml = String::from(board_name_folder.clone().to_lowercase() + ".toml");
+
+        let board_directory = new_board_file_path.join(board_toml_info.manufacturer.trim().clone()).join(board_name_folder.clone());
+
+        // TODO reb understand the errors thrown here
+        fs::create_dir_all(board_directory.clone()).expect("TODO: panic message");
+
+        let binding = board_directory.join(board_name_toml);
+        new_board_file_path = binding.as_ref();
+
+
+        // TODO reb understand the errors thrown here
+        fs::write(new_board_file_path, board_toml_info.generate_toml_string()).expect("TODO: panic message");
+
+        // TODO reb understand the errors thrown here
+        let board_name_svg = String::from(board_name_folder.clone().to_lowercase() + ".svg");
+        fs::copy(svg_file_path, board_directory.join(board_name_svg)).expect("File could not be copied");
     }
 
     pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
