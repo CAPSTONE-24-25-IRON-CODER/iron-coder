@@ -451,7 +451,7 @@ impl Project {
         }
     }
 
-    // TODO reb - implement save_new_board_info
+    // TODO reb - save_new_board_info error handling
     pub fn save_new_board_info(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
