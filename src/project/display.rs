@@ -522,6 +522,11 @@ impl Project {
                             if ui.button("Done").clicked() {
                                 self.save_new_board_info(ctx, ui);
                                 done = true;
+
+                                let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_confirmation_screen_id, true);
+                                });
                             }
                         });
                     },
@@ -564,6 +569,25 @@ impl Project {
                 data.insert_temp(new_board_svg_path_id, PathBuf::new().clone());
             });
         }
+    }
+
+    pub fn display_new_board_confirmation(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+
+        let response = egui::Window::new("Component Creation Successful!")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("You MUST restart the application to use the new board or component.");
+            });
+
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
+
     }
 
 
@@ -868,6 +892,19 @@ impl Project {
         }
         ctx.data_mut(|data| {
             data.insert_temp(new_board_image_id, should_show_new_board_window);
+        });
+
+        // Show the confirmation screen, if needed
+        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+        let mut should_show_confirmation = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
+        });
+
+        if should_show_confirmation {
+            self.display_new_board_confirmation(ctx, &mut should_show_confirmation);
+        }
+        ctx.data_mut(|data| {
+            data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
         });
 
         // let location_text = self.get_location();
