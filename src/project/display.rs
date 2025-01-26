@@ -868,10 +868,15 @@ impl Project {
 
         // Show the generate boards window, if needed
         let generate_boards_id = egui::Id::new("show_generate_boards");
+        let new_board_image_id = egui::Id::new("should_show_new_board_image");
+
         let mut should_show_generate_board_window = ctx.data_mut(|data| {
             data.get_temp_mut_or(generate_boards_id, false).clone()
         });
-        if should_show_generate_board_window {
+        let mut should_show_new_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_image_id, false).clone()
+        });
+        if should_show_generate_board_window && !should_show_new_board_window {
             self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
         }
         ctx.data_mut(|data| {
@@ -879,8 +884,7 @@ impl Project {
         });
 
         // Show the new board window for adding pinouts, if needed
-        let new_board_image_id = egui::Id::new("should_show_new_board_image");
-        let mut should_show_new_board_window = ctx.data_mut(|data| {
+        should_show_new_board_window = ctx.data_mut(|data| {
             data.get_temp_mut_or(new_board_image_id, false).clone()
         });
 
