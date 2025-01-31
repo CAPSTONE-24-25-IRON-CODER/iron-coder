@@ -60,6 +60,15 @@
       - Added two structs: BoardTomlInfo and PinoutTomlInfo that are used to save board state from user input
   - Wire clipping bug research
       - Researched how EGUI decides the order in which windows and elements are drawn to the screen
+  - Terminal Changes
+      - Terminal now editable
+      - Terminal accepts commands based on operating system
+      - Shell output from commands entered show up in Iron Coder terminal
+      - Error handling for invalid commands
+      - Basic functions of terminal applications
+  - Simulator
+      - Added simulator button and window for future use of simulation
+      - Support for basic emulation of code through qemu
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
@@ -74,4 +83,5 @@ parameters that are needed to describe the boards and work within the hardware e
     - Unexpected behavior when fields are left blank or the board name is a duplicate
   - Designate pinouts feature is not yet functional
   - Error messages for SVG parsing failures are not detailed
+  - Tree command in windows OS causes crash, possibly due to string variable not being able to hold data from shell output
 
