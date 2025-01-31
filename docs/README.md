@@ -46,7 +46,20 @@
       - Made a Renode script to load board and program .elf file
       - Researched information on how to support new boards such as the AdaFruit Feather RP2040
       - Planned a path to support the AdaFruit Feather RP2040 by production
-
+# Iron Coder Work Done (Alpha Build)
+  - Automate Generation of Boards Vertical Slice
+      - Added a generate new boards button to the end of the add components menu
+      - Created a TOML information form that allows the user to input information about the new board
+        - The generate new boards button navigates to this window
+      - Added a file dialog that prompts the user for an SVG file when the user completes the TOML information form
+      - Created a new window that displays the selected SVG image or an error message if there was SVG parsing failures
+      - Implemented basic error handling for SVG parsing failures
+      - Added functionality that creates a new board directory, TOML file, and SVG file based on user input
+      - Implemented basic error handling for file operation errors
+      - Made a confirmation window pop-up when the user finishes the board generation process
+      - Added two structs: BoardTomlInfo and PinoutTomlInfo that are used to save board state from user input
+  - Wire clipping bug research
+      - Researched how EGUI decides the order in which windows and elements are drawn to the screen
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
@@ -54,7 +67,11 @@ are being used, functions to load/save projects, and anything else the applicati
 parameters that are needed to describe the boards and work within the hardware editor. 
 # Known bugs
   - Window stays open after loading example, need research into egui to figure out how to close after clicking example
-  - Sometimes drawn wire connections will appear on top of the add board menu
+  - Sometimes drawn wire connections will appear on top of the add board menu and other windows
   - More than one discrete component cannot be added to the hardware editor
   - Rx pin in STM32 board example does not work properly so we can only output data
+  - No user validation in place for TOML information form
+    - Unexpected behavior when fields are left blank or the board name is a duplicate
+  - Designate pinouts feature is not yet functional
+  - Error messages for SVG parsing failures are not detailed
 
