@@ -4,10 +4,12 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Key, Response};
+use eframe::WindowBuilder;
+use egui::{widget_text, Key, Response};
 use egui_extras::RetainedImage;
 use log::{info, warn};
 use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -22,10 +24,13 @@ use crate::app::icons::IconSet;
 use crate::app::{Mode, Warnings, Git};
 
 use enum_iterator;
+use std::error::Error;
 
 use serde::{Serialize, Deserialize};
 
 use super::system;
+
+use std::process::{Command, Stdio, Child};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub enum ProjectViewType {
@@ -38,7 +43,6 @@ pub enum ProjectViewType {
 // this block contains the display related
 // methods for showing the Project in egui.
 impl Project {
-
     /// Recursively display the project directory.
     /// <dir> is the starting location, <level> is the recursion depth
     fn display_directory(&mut self, dir: &Path, level: usize, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -76,26 +80,77 @@ impl Project {
     /// show the terminal pane
     pub fn display_terminal(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         let send_string = "";
-
+        let mut dir_path = self.get_location() + ">> ";
+        let mut at = true;
+        if self.terminal_buffer.is_empty()
+        {
+            self.terminal_buffer = dir_path.clone();
+        }
+        if self.child.is_none() {
+            self.child.insert(Command::new("cmd")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap()
+            );
+        }
+        
         // If there is an open channel, see if we can get some data from it
         if let Some(rx) = &self.receiver {
             while let Ok(s) = rx.try_recv() {
                 self.terminal_buffer += s.as_str();
             }
         }
-
         egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
             egui::ScrollArea::both()
             .auto_shrink([false; 2])
             .stick_to_bottom(true)
             .show(ui, |ui| {
                 ui.add(
+                    egui::TextEdit::multiline(&mut self.persistant_buffer)
+                    .interactive(false)
+                    .frame(false)
+                );
+                let response = ui.add(
                     egui::TextEdit::multiline(&mut self.terminal_buffer)
                     .code_editor()
-                    .interactive(false)
+                    .interactive(true)
                     .desired_width(f32::INFINITY)
                     .frame(false)
-                )
+                );
+                
+                if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                    // self.terminal_buffer = String::from("Enter Clicked");
+                    let index = self.terminal_buffer.find('>');
+                    let index_num = index.unwrap_or(0) + 2;
+                    
+                    let output = Command::new("powershell")
+                    .arg("/C")
+                    .arg(&self.terminal_buffer[index_num..])
+                    .output()
+                    .expect("Error");
+
+                    let stdout = String::from_utf8(output.stdout).unwrap();
+
+                    self.persistant_buffer += &stdout;
+
+                    self.terminal_buffer = String::from(dir_path);
+
+                    // FUTURE USE FOR PERSITANT TERMINAL
+                    // let mut a = self.child.as_mut().take().unwrap();
+                    // let write = self.terminal_buffer[index_num..].as_bytes();
+                    // a.stdin.as_mut().unwrap().write_all(write);
+                    
+                    // let mut cmdout = a.stdout.take();
+                    // let mut buf = [0; 10000];
+                    // if !cmdout.is_none()
+                    // {
+                    //     let r = cmdout.unwrap().read(&mut buf);
+                    //     let n = r.unwrap();
+                    //     let s = String::from_utf8(buf[..n].to_vec()).unwrap();
+                    //     println!("{}", s);
+                    // }
+                }
             });
         });
     }
@@ -181,6 +236,7 @@ impl Project {
             ).frame(false);
             if ui.add(button).clicked() {
                 self.terminal_buffer.clear();
+                self.persistant_buffer.clear();
             }
             // Open a window to add changes
             // Commit the changes to the git repo with a user message

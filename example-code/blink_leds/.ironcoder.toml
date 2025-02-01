@@ -1,6 +1,6 @@
 name = "Testing"
-location = "example-code/Test1"
-current_view = "BoardsView"
+location = "example-code/blink_leds"
+current_view = "FileTree"
 
 [system]
 connections = []
