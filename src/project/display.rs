@@ -526,6 +526,7 @@ impl Project {
 
 
                         if !missing_field_flag {
+                            self.clear_required_flag_messages(ctx);
                             if let Some(svg_file_path) = FileDialog::new()
                                 .set_title("Select Image File for Board (must be .svg file)")
                                 .add_filter("SVG Filter", &["svg"])
@@ -554,10 +555,51 @@ impl Project {
         }
 
         if !*should_show {
+            self.clear_required_flag_messages(ctx);
             ctx.data_mut(|data| {
                 data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
             });
         }
+    }
+
+    pub fn clear_required_flag_messages(&mut self, ctx: &egui::Context){
+        let name_required_id = egui::Id::new("name_required");
+        let manufacture_required_id = egui::Id::new("manufacturer_required");
+        let standard_required_id = egui::Id::new("standard_required");
+        let cpu_required_id = egui::Id::new("cpu_required");
+        let flash_required_id = egui::Id::new("flash_required");
+        let ram_required_id = egui::Id::new("ram_required");
+        let req_crates_required_id = egui::Id::new("req_crates_required");
+        let rel_crates_required_id = egui::Id::new("rel_crates_required");
+        let pins_required_id = egui::Id::new("pins_required");
+        ctx.data_mut(|data| {
+            data.insert_temp(name_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(manufacture_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(standard_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(cpu_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(flash_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(ram_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(req_crates_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(rel_crates_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(pins_required_id, false);
+        });
+
     }
 
     // TODO reb - save_new_board_info error handling
