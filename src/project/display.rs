@@ -416,25 +416,134 @@ impl Project {
                     data.insert_temp(board_toml_info_id, board_toml_info);
                 });
 
+                board_toml_info = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+                });
+
                 ui.horizontal(|ui| {
                     if ui.button("Next").clicked() {
                         // TODO reb - input validation before move to next screen
-                        if let Some(svg_file_path) = FileDialog::new()
-                            .set_title("Select Image File for Board (must be .svg file)")
-                            .add_filter("SVG Filter", &["svg"])
-                            .pick_file()
-                        {
-                            let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
-                            let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+                        let mut missing_field_flag : bool = false;
+                        let name_required_id = egui::Id::new("name_required");
+                        let manufacture_required_id = egui::Id::new("manufacturer_required");
+                        let standard_required_id = egui::Id::new("standard_required");
+                        let cpu_required_id = egui::Id::new("cpu_required");
+                        let flash_required_id = egui::Id::new("flash_required");
+                        let ram_required_id = egui::Id::new("ram_required");
+                        let req_crates_required_id = egui::Id::new("req_crates_required");
+                        let rel_crates_required_id = egui::Id::new("rel_crates_required");
+                        let pins_required_id = egui::Id::new("pins_required");
 
+                        if board_toml_info.name.is_empty() {
+                            missing_field_flag = true;
                             ctx.data_mut(|data| {
-                                data.insert_temp(new_board_svg_path_id, svg_file_path);
+                                data.insert_temp(name_required_id, true);
                             });
-
+                        } else {
                             ctx.data_mut(|data| {
-                                data.insert_temp(should_show_new_board_image_id, true);
+                                data.insert_temp(name_required_id, false);
                             });
                         }
+                        if board_toml_info.manufacturer.is_empty() {
+                            missing_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(manufacture_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(manufacture_required_id, false);
+                            });
+                        }
+                        if board_toml_info.standard.is_empty() {
+                            missing_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(standard_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(standard_required_id, false);
+                            });
+                        }
+                        if board_toml_info.cpu.is_empty() {
+                            missing_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(cpu_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(cpu_required_id, false);
+                            });
+                        }
+                        if board_toml_info.flash == 0 {
+                            missing_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(flash_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(flash_required_id, false);
+                            });
+                        }
+                        if board_toml_info.ram == 0 {
+                            missing_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(ram_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(ram_required_id, false);
+                            });
+                        }
+                        if board_toml_info.required_crates.contains(&String::new()) {
+                            missing_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(req_crates_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(req_crates_required_id, false);
+                            });
+                        }
+                        if board_toml_info.related_crates.contains(&String::new()) {
+                            missing_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(rel_crates_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(rel_crates_required_id, false);
+                            });
+                        }
+
+                        for pinout in board_toml_info.pinouts {
+                            if pinout.pins.contains(&String::new()) {
+                                missing_field_flag = true;
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(pins_required_id, true);
+                                });
+                            }
+                        }
+
+
+                        if !missing_field_flag {
+                            if let Some(svg_file_path) = FileDialog::new()
+                                .set_title("Select Image File for Board (must be .svg file)")
+                                .add_filter("SVG Filter", &["svg"])
+                                .pick_file()
+                            {
+                                let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
+                                let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_svg_path_id, svg_file_path);
+                                });
+
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(should_show_new_board_image_id, true);
+                                });
+                            }
+                        }
+
                     }
                 });
         });
@@ -502,7 +611,7 @@ impl Project {
     }
 
     pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
-        // TODO reb Include fuctionality for user to draw circles
+        // TODO reb Include functionality for user to draw circles
 
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
         let mut done = false;

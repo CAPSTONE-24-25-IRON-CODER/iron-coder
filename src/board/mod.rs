@@ -10,7 +10,7 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
-use egui::{Button, TextBuffer, Vec2};
+use egui::{Button, Color32, TextBuffer, Vec2};
 use serde::{Serialize, Deserialize};
 
 use ra_ap_ide;
@@ -394,6 +394,19 @@ impl BoardTomlInfo {
         pinout_str
     }
 
+    pub fn display_required_message(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, flag_id: &str){
+        let field_required_id = egui::Id::new(flag_id);
+        let mut display_name_required : bool = ctx.data_mut(|data| {
+            data.get_temp_mut_or(field_required_id, false).clone()
+        });
+
+        if display_name_required {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Field is required.").color(Color32::RED));
+            });
+        }
+    }
+
     pub fn update_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("Board Name:");
@@ -401,11 +414,15 @@ impl BoardTomlInfo {
                 .hint_text("Enter here").show(ui);
         });
 
+        self.display_required_message(ctx, ui, "name_required");
+
         ui.horizontal(|ui| {
             ui.label("Manufacturer:");
             egui::TextEdit::singleline(&mut self.manufacturer)
                 .hint_text("Enter here").show(ui);
         });
+
+        self.display_required_message(ctx, ui, "manufacturer_required");
 
         ui.horizontal(|ui | {
             ui.label("Select Board Type:");
@@ -420,6 +437,9 @@ impl BoardTomlInfo {
                 self.standard = "Components".parse().unwrap();
                 ui.selectable_value(&mut self.standard, "Components".parse().unwrap(), "Components");
             } else {
+                if self.standard.eq("Components") {
+                    self.standard.clear();
+                }
                 ui.selectable_value(&mut self.standard, BoardStandards::Arduino.to_string(), "Arduino");
                 ui.selectable_value(&mut self.standard, BoardStandards::RaspberryPi.to_string(), "RaspberryPi");
                 ui.selectable_value(&mut self.standard, BoardStandards::Feather.to_string(), "Feather");
@@ -428,21 +448,29 @@ impl BoardTomlInfo {
             }
         });
 
+        self.display_required_message(ctx, ui, "standard_required");
+
         ui.horizontal(|ui| {
             ui.label("CPU:");
             egui::TextEdit::singleline(&mut self.cpu)
                 .hint_text("Enter here").show(ui);
         });
 
+        self.display_required_message(ctx, ui, "cpu_required");
+
         ui.horizontal(|ui| {
             ui.label("Flash (kb):");
             ui.add(egui::Slider::new(&mut self.flash, 0..=8000));
         });
 
+        self.display_required_message(ctx, ui, "flash_required");
+
         ui.horizontal(|ui| {
             ui.label("RAM (kb):");
             ui.add(egui::Slider::new(&mut self.ram, 0..=4000));
         });
+
+        self.display_required_message(ctx, ui, "ram_required");
 
         ui.horizontal(|ui| {
             if self.required_crates.is_empty() {
@@ -474,6 +502,17 @@ impl BoardTomlInfo {
             });
         });
 
+        let req_crates_required_id = egui::Id::new("req_crates_required");
+        let mut display_crate_required : bool = ctx.data_mut(|data| {
+            data.get_temp_mut_or(req_crates_required_id, false).clone()
+        });
+
+        if display_crate_required {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Field is required. Delete empty crates").color(Color32::RED));
+            });
+        }
+
         ui.horizontal(|ui| {
             if self.related_crates.is_empty() {
                 self.related_crates.push("".parse().unwrap());
@@ -504,6 +543,22 @@ impl BoardTomlInfo {
             });
         });
 
+        let rel_required_id = egui::Id::new("rel_crates_required");
+        let mut display_rel_required : bool = ctx.data_mut(|data| {
+            data.get_temp_mut_or(rel_required_id, false).clone()
+        });
+
+        if display_rel_required {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Field is required. Delete empty crates").color(Color32::RED));
+            });
+        }
+
+        let pins_required_id = egui::Id::new("pins_required");
+        let mut display_pins_required : bool = ctx.data_mut(|data| {
+            data.get_temp_mut_or(pins_required_id, false).clone()
+        });
+
         ui.horizontal(|ui| {
             if self.pinouts.is_empty() {
                 self.pinouts.push(PinoutTomlInfo::default());
@@ -524,6 +579,11 @@ impl BoardTomlInfo {
                             }
                         }
                     });
+                    if display_pins_required && self.pinouts[n].pins.contains(&String::new()) {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Field is required. Delete empty pins").color(Color32::RED));
+                        });
+                    }
                     if n == self.pinouts.len() -1 && ui.button("Add Pinout").clicked() {
                         self.pinouts.push(PinoutTomlInfo::default());
                         break;
