@@ -423,8 +423,10 @@ impl Project {
                 ui.horizontal(|ui| {
                     if ui.button("Next").clicked() {
                         // TODO reb - input validation before move to next screen
-                        let mut missing_field_flag : bool = false;
+                        let mut invalid_field_flag : bool = false;
+                        let mut duplicate_name_flag : bool = false;
                         let name_required_id = egui::Id::new("name_required");
+                        let name_duplicated_id = egui::Id::new("name_duplicated");
                         let manufacture_required_id = egui::Id::new("manufacturer_required");
                         let standard_required_id = egui::Id::new("standard_required");
                         let cpu_required_id = egui::Id::new("cpu_required");
@@ -434,8 +436,24 @@ impl Project {
                         let rel_crates_required_id = egui::Id::new("rel_crates_required");
                         let pins_required_id = egui::Id::new("pins_required");
 
+                        for board in self.known_boards.iter() {
+                            if board.get_name().to_lowercase().replace(" ", "").trim().eq(board_toml_info.name.to_lowercase().replace(" ", "").trim()){
+                                invalid_field_flag = true;
+                                duplicate_name_flag = true;
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(name_duplicated_id, true);
+                                });
+                            }
+                        }
+
+                        if !duplicate_name_flag {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(name_duplicated_id, false);
+                            });
+                        }
+
                         if board_toml_info.name.is_empty() {
-                            missing_field_flag = true;
+                            invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(name_required_id, true);
                             });
@@ -445,7 +463,7 @@ impl Project {
                             });
                         }
                         if board_toml_info.manufacturer.is_empty() {
-                            missing_field_flag = true;
+                            invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(manufacture_required_id, true);
                             });
@@ -455,7 +473,7 @@ impl Project {
                             });
                         }
                         if board_toml_info.standard.is_empty() {
-                            missing_field_flag = true;
+                            invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(standard_required_id, true);
                             });
@@ -465,7 +483,7 @@ impl Project {
                             });
                         }
                         if board_toml_info.cpu.is_empty() {
-                            missing_field_flag = true;
+                            invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(cpu_required_id, true);
                             });
@@ -475,7 +493,7 @@ impl Project {
                             });
                         }
                         if board_toml_info.flash == 0 {
-                            missing_field_flag = true;
+                            invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(flash_required_id, true);
                             });
@@ -485,7 +503,7 @@ impl Project {
                             });
                         }
                         if board_toml_info.ram == 0 {
-                            missing_field_flag = true;
+                            invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(ram_required_id, true);
                             });
@@ -495,7 +513,7 @@ impl Project {
                             });
                         }
                         if board_toml_info.required_crates.contains(&String::new()) {
-                            missing_field_flag = true;
+                            invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(req_crates_required_id, true);
                             });
@@ -505,7 +523,7 @@ impl Project {
                             });
                         }
                         if board_toml_info.related_crates.contains(&String::new()) {
-                            missing_field_flag = true;
+                            invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(rel_crates_required_id, true);
                             });
@@ -517,7 +535,7 @@ impl Project {
 
                         for pinout in board_toml_info.pinouts {
                             if pinout.pins.contains(&String::new()) {
-                                missing_field_flag = true;
+                                invalid_field_flag = true;
                                 ctx.data_mut(|data| {
                                     data.insert_temp(pins_required_id, true);
                                 });
@@ -525,7 +543,7 @@ impl Project {
                         }
 
 
-                        if !missing_field_flag {
+                        if !invalid_field_flag {
                             self.clear_required_flag_messages(ctx);
                             if let Some(svg_file_path) = FileDialog::new()
                                 .set_title("Select Image File for Board (must be .svg file)")

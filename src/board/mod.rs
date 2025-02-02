@@ -330,6 +330,7 @@ pub struct BoardTomlInfo {
 }
 
 impl BoardTomlInfo {
+    /// Convert fields to TOML string
     pub fn get_name(&self) -> String { String::from("name = \"") + self.name.as_str() + "\"\n" }
 
     pub fn get_manufacturer(&self) -> String { String::from("manufacturer = \"") + self.manufacturer.as_str() + "\"\n" }
@@ -413,6 +414,17 @@ impl BoardTomlInfo {
             egui::TextEdit::singleline(&mut self.name)
                 .hint_text("Enter here").show(ui);
         });
+
+        let duplicate_id = egui::Id::new("name_duplicated");
+        let name_duplicated : bool = ctx.data_mut(|data| {
+            data.get_temp_mut_or(duplicate_id, false).clone()
+        });
+
+        if name_duplicated {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Board already exists.").color(Color32::RED));
+            });
+        }
 
         self.display_required_message(ctx, ui, "name_required");
 
@@ -616,6 +628,7 @@ pub struct PinoutTomlInfo {
 }
 
 impl PinoutTomlInfo {
+    /// Convert fields to TOML string
     pub fn get_pins(&self) -> String {
         let mut pins_str = String::from("pins = [");
         for pin in &self.pins{
