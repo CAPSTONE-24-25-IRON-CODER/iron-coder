@@ -4,7 +4,7 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Color32, Key, Response, TextBuffer, Vec2, Widget};
+use egui::{Color32, Key, PointerButton, Pos2, Rect, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
 use log::{info, warn};
 use std::collections::HashMap;
@@ -203,7 +203,7 @@ impl Project {
                 let repo_statuses = repo.statuses(Some(&mut status_options));
 
                 // Check if there are any changes or new files and save them in a vector
-                let mut changes: Vec<String> = Vec::new();
+                let mut changes: std::vec::Vec<String> = std::vec::Vec::new();
                 for entry in repo_statuses.unwrap().iter() {
                     if entry.status().contains(git2::Status::WT_NEW) || entry.status().contains(git2::Status::WT_MODIFIED)
                     || entry.status().contains(git2::Status::INDEX_MODIFIED){
@@ -349,7 +349,7 @@ impl Project {
             data.get_temp_mut_or(id, false).clone()
         });
         let mut board: Option<board::Board> = None;
-        let mut boards: Vec<Board> = self.known_boards.clone();
+        let mut boards: std::vec::Vec<Board> = self.known_boards.clone();
         boards.sort();
         // create the window
         let response = egui::Window::new("Components")
@@ -422,7 +422,7 @@ impl Project {
 
                 ui.horizontal(|ui| {
                     if ui.button("Next").clicked() {
-                        // TODO reb - input validation before move to next screen
+                        // Input validation before move to next screen
                         let mut invalid_field_flag : bool = false;
                         let mut duplicate_name_flag : bool = false;
                         let name_required_id = egui::Id::new("name_required");
@@ -621,7 +621,7 @@ impl Project {
     }
 
     // TODO reb - save_new_board_info error handling
-    pub fn save_new_board_info(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    pub fn save_new_board_info(&mut self, ctx: &egui::Context) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
         let mut board_toml_info = ctx.data_mut(|data| {
@@ -674,6 +674,7 @@ impl Project {
         // TODO reb Include functionality for user to draw circles
 
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let pin_rects_id = egui::Id::new("new_board_pin_rects");
         let mut done = false;
         let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
             .open(should_show)
@@ -685,6 +686,9 @@ impl Project {
 
                 let svg_path  = ctx.data_mut(|data| {
                     data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
+                });
+                let mut pin_rects  = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pin_rects_id, std::vec::Vec::new()).clone()
                 });
                 let mut b = Board::default();
 
@@ -698,15 +702,55 @@ impl Project {
                             b.clone().svg_board_info.unwrap().image,
                         );
 
-                        let display_size = b.svg_board_info.unwrap().physical_size * 25.0;
+                        let display_size = b.svg_board_info.unwrap().physical_size * 5.0;
 
                         let image_rect = retained_image.show_max_size(ui, display_size).rect;
 
                         ui.allocate_rect(image_rect, egui::Sense::hover());
 
+                        if ui.ui_contains_pointer() {
+                            if let Some(cursor_origin) = ctx.pointer_latest_pos(){
+                                let mut hovering_over_pin = false;
+                                // Check all existing pins to see if cursor is hovering over (prevent overlapping pins)
+                                // Also delete pins that are right-clicked
+                                for i in 0..pin_rects.len() {
+                                    if ui.rect_contains_pointer(pin_rects[i]){
+                                        hovering_over_pin = true;
+                                        if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
+                                            if response.secondary_clicked(){
+                                                pin_rects.remove(i);
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+
+                                // Display visual pin icon helper
+                                if !hovering_over_pin {
+                                    ui.painter().circle_filled(cursor_origin, 4.0, Color32::DARK_RED);
+                                }
+                                // Add pin if left click
+                                if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
+                                    if !hovering_over_pin && response.clicked() {
+                                        let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(10.0, 10.0));
+                                        pin_rects.push(pin_rect);
+                                    }
+                                }
+                            }
+                        }
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_rects_id, pin_rects.clone());
+                        });
+
+                        for pin in pin_rects {
+                            ui.painter().circle_filled(pin.center(), 4.0, Color32::GREEN);
+                        }
+
+
                         ui.horizontal(|ui| {
                             if ui.button("Done").clicked() {
-                                self.save_new_board_info(ctx, ui);
+                                self.save_new_board_info(ctx);
                                 done = true;
 
                                 let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
