@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
+use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
 use egui::widgets::Button;
 use git2::{Repository, StatusOptions};
@@ -25,7 +25,7 @@ use enum_iterator;
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
 use crate::board::{Board, BoardTomlInfo};
-use crate::board::svg_reader::SvgBoardInfo;
+use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -624,12 +624,25 @@ impl Project {
     pub fn save_new_board_info(&mut self, ctx: &egui::Context) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let pin_rects_id = egui::Id::new("new_board_pin_rects");
+        let image_pos_id = egui::Id::new("image_rect_pos");
+        let pin_names_id = egui::Id::new("pin_names_id");
         let mut board_toml_info = ctx.data_mut(|data| {
             data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
         });
         let svg_file_path  = ctx.data_mut(|data| {
             data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
         });
+        let mut pin_rects : Vec<Rect>  = ctx.data_mut(|data| {
+            data.get_temp_mut_or(pin_rects_id, std::vec::Vec::new()).clone()
+        });
+        let image_pos = ctx.data_mut(|data| {
+            data.get_temp_mut_or(image_pos_id, Pos2::new(0.0,0.0)).clone()
+        });
+        let pin_names : Vec<String>  = ctx.data_mut(|data| {
+            data.get_temp_mut_or(pin_names_id, std::vec::Vec::new()).clone()
+        });
+
 
 
         let mut new_board_file_path = Path::new("./iron-coder-boards");
@@ -645,7 +658,6 @@ impl Project {
                 let binding = board_directory.join(board_name_toml);
                 new_board_file_path = binding.as_ref();
 
-
                 // TODO reb understand the errors thrown here
                 let toml_res = fs::write(new_board_file_path, board_toml_info.generate_toml_string());
 
@@ -656,11 +668,50 @@ impl Project {
 
                 // TODO reb understand the errors thrown here
                 let board_name_svg = String::from(board_name_folder.clone().to_lowercase() + ".svg");
-                let svg_res = fs::copy(svg_file_path, board_directory.join(board_name_svg));
+                //let svg_res = fs::copy(svg_file_path, board_directory.join(board_name_svg));
+
+                // TODO reb understand the errors thrown here
+                let mut svg_string = match fs::read_to_string(svg_file_path) {
+                    Ok(string) => string,
+                    Err(e) => String::new(),
+                };
+
+                let mut pin_rects_string = String::new();
+
+                let mut index = 0;
+                for pin in pin_rects{
+                    let x = (pin.center().x - image_pos.clone().x)/10.0;
+                    let y = (pin.center().y - image_pos.clone().y)/10.0;
+                    let pin_string = format!("    <circle\n       \
+                           style=\"fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19048\"\n       \
+                           id=\"{}\"\n       \
+                           cx=\"{}\"\n       \
+                           cy=\"{}\"\n       \
+                           r=\"0.84601754\" />\n", pin_names[index], x, y);
+                    pin_rects_string.push_str(pin_string.as_str());
+                    index += 1;
+                }
+
+                if svg_string.contains("  </g>\n</svg>") {
+                    pin_rects_string.push_str("  </g>\n</svg>");
+                    svg_string = svg_string.replace("  </g>\n</svg>", pin_rects_string.as_str());
+
+                } else if svg_string.contains("</svg>") {
+                    pin_rects_string.push_str("</svg>");
+                    svg_string = svg_string.replace("</svg>", pin_rects_string.as_str());
+
+                } else if svg_string.is_empty() {
+                    info!("Read SVG from String failed")
+                } else {
+                    info!("Copy Pin Rects failed")
+                }
+
+                // TODO reb understand the errors thrown here
+                let svg_res = fs::write(board_directory.join(board_name_svg), svg_string);
 
                 match svg_res {
                     Ok(r) => {}
-                    Err(e) => {info!("Copy SVG file failed")}
+                    Err(e) => {info!("Create SVG file failed")}
                 }
 
             }
@@ -671,10 +722,11 @@ impl Project {
     }
 
     pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
-        // TODO reb Include functionality for user to draw circles
-
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
         let pin_rects_id = egui::Id::new("new_board_pin_rects");
+        let pin_names_id = egui::Id::new("pin_names_id");
+        let image_pos_id = egui::Id::new("image_rect_pos");
+        let pin_name_box_id = egui::Id::new("pin_name_box_id");
         let mut done = false;
         let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
             .open(should_show)
@@ -690,24 +742,35 @@ impl Project {
                 let mut pin_rects  = ctx.data_mut(|data| {
                     data.get_temp_mut_or(pin_rects_id, std::vec::Vec::new()).clone()
                 });
+                let mut pin_names  = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pin_names_id, std::vec::Vec::new()).clone()
+                });
+                let mut pin_name_box = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pin_name_box_id, String::new()).clone()
+                });
                 let mut b = Board::default();
 
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
                     Ok(svg_board_info) => {
-                        info!("successfully decoded SVG for board. Board has physical size:");
+                        // Display image
                         b.svg_board_info = Some(svg_board_info);
                         let retained_image = RetainedImage::from_color_image(
                             "pic",
                             b.clone().svg_board_info.unwrap().image,
                         );
 
-                        let display_size = b.svg_board_info.unwrap().physical_size * 5.0;
+                        let display_size = b.svg_board_info.unwrap().physical_size * 10.0;
 
                         let image_rect = retained_image.show_max_size(ui, display_size).rect;
 
+                        ctx.data_mut(|data| {
+                            data.insert_temp(image_pos_id, image_rect.left_top());
+                        });
+
                         ui.allocate_rect(image_rect, egui::Sense::hover());
 
+                        // Designate pins
                         if ui.ui_contains_pointer() {
                             if let Some(cursor_origin) = ctx.pointer_latest_pos(){
                                 let mut hovering_over_pin = false;
@@ -719,6 +782,7 @@ impl Project {
                                         if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
                                             if response.secondary_clicked(){
                                                 pin_rects.remove(i);
+                                                pin_names.remove(i);
                                             }
                                         }
                                         break;
@@ -727,13 +791,14 @@ impl Project {
 
                                 // Display visual pin icon helper
                                 if !hovering_over_pin {
-                                    ui.painter().circle_filled(cursor_origin, 4.0, Color32::DARK_RED);
+                                    ui.painter().circle_filled(cursor_origin, 8.0, Color32::DARK_RED);
                                 }
                                 // Add pin if left click
                                 if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
                                     if !hovering_over_pin && response.clicked() {
-                                        let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(10.0, 10.0));
+                                        let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(16.0, 16.0));
                                         pin_rects.push(pin_rect);
+                                        pin_names.push(format!("pin{}", pin_rects.len()))
                                     }
                                 }
                             }
@@ -743,10 +808,39 @@ impl Project {
                             data.insert_temp(pin_rects_id, pin_rects.clone());
                         });
 
+                        // Display drawn pins and names
+                        let mut index = 0;
                         for pin in pin_rects {
-                            ui.painter().circle_filled(pin.center(), 4.0, Color32::GREEN);
+                            ui.painter().circle_filled(pin.center(), 8.0, Color32::BLUE);
+                            let name = match pin_names.get(index) {
+                                None => {"pinx"}
+                                Some(name) => {name}
+                            };
+                            ui.painter().text(pin.center(), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(10.0), Color32::WHITE);
+                            if ui.rect_contains_pointer(pin) {
+                                if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
+                                    // Change name if double-clicked
+                                    if response.double_clicked(){
+                                        pin_names[index] = pin_name_box.clone();
+                                    }
+                                }
+                            }
+                            index += 1;
                         }
 
+                        ui.horizontal(|ui| {
+                            ui.label("Pin Name:");
+                            egui::TextEdit::singleline(&mut pin_name_box)
+                                .hint_text("Enter name here").show(ui);
+                        });
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_name_box_id, pin_name_box.clone());
+                        });
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_names_id, pin_names.clone());
+                        });
 
                         ui.horizontal(|ui| {
                             if ui.button("Done").clicked() {
