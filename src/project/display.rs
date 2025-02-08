@@ -753,6 +753,8 @@ impl Project {
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
                     Ok(svg_board_info) => {
+                        ui.label("Left-Click to Add a Pin\nRight-Click to Delete an Existing Pin\nDouble-Click to Apply a New Name to the Pin");
+
                         // Display image
                         b.svg_board_info = Some(svg_board_info);
                         let retained_image = RetainedImage::from_color_image(
