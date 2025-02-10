@@ -858,8 +858,11 @@ impl Project {
                     },
                     Err(e) => {
                         // TODO reb error handling here
-                        warn!("error with svg parsing! {:?}", e);
-                        ui.label("Error with SVG parsing");
+                        ui.label(format!("Error with SVG parsing: {e:?}"));
+                        if format!("{e:?}").eq("ImageNotPNG"){
+                            ui.label("SVG must be derived from PNG Image");
+                        }
+
                         if ui.button("Pick a different file").clicked() {
                             if let Some(svg_file_path) = FileDialog::new()
                                 .set_title("Select Image File for Board (must be .svg file)")
@@ -893,6 +896,18 @@ impl Project {
 
             ctx.data_mut(|data| {
                 data.insert_temp(new_board_svg_path_id, PathBuf::new().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(pin_rects_id, Vec::<egui::Rect>::new().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(pin_name_box_id, String::new().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(pin_names_id, Vec::<String>::new().clone());
             });
         }
     }
