@@ -644,7 +644,6 @@ impl Project {
         });
 
 
-
         let mut new_board_file_path = Path::new("./iron-coder-boards");
         let board_name_folder = String::from(board_toml_info.name.trim().replace(" ", "_"));
         let board_name_toml = String::from(board_name_folder.clone().to_lowercase() + ".toml");
@@ -726,6 +725,7 @@ impl Project {
         let pin_rects_id = egui::Id::new("new_board_pin_rects");
         let pin_names_id = egui::Id::new("pin_names_id");
         let image_pos_id = egui::Id::new("image_rect_pos");
+        let pin_radius_id = egui::Id::new("pin_radius_id");
         let pin_name_box_id = egui::Id::new("pin_name_box_id");
         let mut done = false;
         let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
@@ -747,6 +747,9 @@ impl Project {
                 });
                 let mut pin_name_box = ctx.data_mut(|data| {
                     data.get_temp_mut_or(pin_name_box_id, String::new()).clone()
+                });
+                let mut pin_radius = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pin_radius_id, 8.0).clone()
                 });
                 let mut b = Board::default();
 
@@ -793,12 +796,12 @@ impl Project {
 
                                 // Display visual pin icon helper
                                 if !hovering_over_pin {
-                                    ui.painter().circle_filled(cursor_origin, 8.0, Color32::DARK_RED);
+                                    ui.painter().circle_filled(cursor_origin, pin_radius, Color32::DARK_RED);
                                 }
                                 // Add pin if left click
                                 if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
                                     if !hovering_over_pin && response.clicked() {
-                                        let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(16.0, 16.0));
+                                        let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(pin_radius * 2.0, pin_radius * 2.0));
                                         pin_rects.push(pin_rect);
                                         pin_names.push(format!("pin{}", pin_rects.len()))
                                     }
@@ -813,12 +816,12 @@ impl Project {
                         // Display drawn pins and names
                         let mut index = 0;
                         for pin in pin_rects {
-                            ui.painter().circle_filled(pin.center(), 8.0, Color32::BLUE);
+                            ui.painter().circle_filled(pin.center(), pin_radius, Color32::BLUE);
                             let name = match pin_names.get(index) {
                                 None => {"pinx"}
                                 Some(name) => {name}
                             };
-                            ui.painter().text(pin.center(), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(10.0), Color32::WHITE);
+                            ui.painter().text(pin.center(), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(pin_radius * 1.25), Color32::WHITE);
                             if ui.rect_contains_pointer(pin) {
                                 if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
                                     // Change name if double-clicked
@@ -834,6 +837,13 @@ impl Project {
                             ui.label("Pin Name:");
                             egui::TextEdit::singleline(&mut pin_name_box)
                                 .hint_text("Enter name here").show(ui);
+                        });
+
+                        ui.label("Pin Radius");
+                        ui.add(egui::Slider::new(&mut pin_radius, 2.0..=15.0));
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_radius_id, pin_radius.clone());
                         });
 
                         ctx.data_mut(|data| {
