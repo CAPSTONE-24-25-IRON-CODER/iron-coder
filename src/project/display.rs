@@ -4,16 +4,16 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Key, Response, Widget};
+use egui::{Color32, Key, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
 use log::{info, warn};
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::widget_text::RichText;
 use egui::widgets::Button;
-
 use git2::{Repository, StatusOptions};
 
 use crate::board;
@@ -22,9 +22,10 @@ use crate::app::icons::IconSet;
 use crate::app::{Mode, Warnings, Git};
 
 use enum_iterator;
-
+use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
-use crate::board::Board;
+use crate::board::{Board, BoardTomlInfo};
+use crate::board::svg_reader::SvgBoardInfo;
 use super::system;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -343,7 +344,10 @@ impl Project {
 
     /// Display the list of available boards in a window, and return one if it was clicked
     pub fn display_known_boards(&mut self, ctx: &egui::Context, should_show: &mut bool) -> Option<board::Board> {
-
+        let id = egui::Id::new("show_generate_boards");
+        let mut should_show_generate_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(id, false).clone()
+        });
         let mut board: Option<board::Board> = None;
         let mut boards: Vec<Board> = self.known_boards.clone();
         boards.sort();
@@ -369,7 +373,14 @@ impl Project {
                         if columns[col].add(board::display::BoardSelectorWidget(b.clone())).clicked() {
                             board = Some(b.clone());
                         }
-                        // TODO reb - add button for adding new board not shown
+                    }
+
+                    let last_col = self.known_boards.len();
+                    if columns[last_col % num_cols].add(Button::new("Generate New Board").min_size(Vec2::new(60.0, 45.0))).clicked() {
+                        should_show_generate_board_window = true;
+                        ctx.data_mut(|data| {
+                            data.insert_temp(id, should_show_generate_board_window);
+                        });
                     }
                 });
             });
@@ -384,17 +395,216 @@ impl Project {
 
     }
 
-    // TODO reb - implement display_generate_new_board
-    pub fn display_generate_new_board(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+        let board_toml_info_id = egui::Id::new("board_toml_info");
+        let response = egui::Window::new("Generate TOML File")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("Fill out all fields. Press X to cancel");
+
+                let mut board_toml_info = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+                });
+
+                BoardTomlInfo::update_form_UI(&mut board_toml_info, ctx, ui);
+
+                ctx.data_mut(|data| {
+                    data.insert_temp(board_toml_info_id, board_toml_info);
+                });
+
+                ui.horizontal(|ui| {
+                    if ui.button("Next").clicked() {
+                        // TODO reb - input validation before move to next screen
+                        if let Some(svg_file_path) = FileDialog::new()
+                            .set_title("Select Image File for Board (must be .svg file)")
+                            .add_filter("SVG Filter", &["svg"])
+                            .pick_file()
+                        {
+                            let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
+                            let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+
+                            ctx.data_mut(|data| {
+                                data.insert_temp(new_board_svg_path_id, svg_file_path);
+                            });
+
+                            ctx.data_mut(|data| {
+                                data.insert_temp(should_show_new_board_image_id, true);
+                            });
+                        }
+                    }
+                });
+        });
+
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
+
+        if !*should_show {
+            ctx.data_mut(|data| {
+                data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
+            });
+        }
+    }
+
+    // TODO reb - save_new_board_info error handling
+    pub fn save_new_board_info(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let board_toml_info_id = egui::Id::new("board_toml_info");
+        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let mut board_toml_info = ctx.data_mut(|data| {
+            data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+        });
+        let svg_file_path  = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
+        });
+
+
+        let mut new_board_file_path = Path::new("./iron-coder-boards");
+        let board_name_folder = String::from(board_toml_info.name.trim().replace(" ", "_"));
+        let board_name_toml = String::from(board_name_folder.clone().to_lowercase() + ".toml");
+
+        let board_directory = new_board_file_path.join(board_toml_info.manufacturer.trim().clone()).join(board_name_folder.clone());
+
+        // TODO reb understand the errors thrown here
+        let create_dir_res = fs::create_dir_all(board_directory.clone());
+        match create_dir_res {
+            Ok(r) => {
+                let binding = board_directory.join(board_name_toml);
+                new_board_file_path = binding.as_ref();
+
+
+                // TODO reb understand the errors thrown here
+                let toml_res = fs::write(new_board_file_path, board_toml_info.generate_toml_string());
+
+                match toml_res {
+                    Ok(r) => {}
+                    Err(e) => {info!("Create TOML file failed")}
+                }
+
+                // TODO reb understand the errors thrown here
+                let board_name_svg = String::from(board_name_folder.clone().to_lowercase() + ".svg");
+                let svg_res = fs::copy(svg_file_path, board_directory.join(board_name_svg));
+
+                match svg_res {
+                    Ok(r) => {}
+                    Err(e) => {info!("Copy SVG file failed")}
+                }
+
+            }
+            Err(e) => {info!("Create new board directory failed")}
+        }
+
 
     }
-    // TODO reb - implement display_image_uploader
-    pub fn display_image_uploader(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
 
+    pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+        // TODO reb Include fuctionality for user to draw circles
+
+        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let mut done = false;
+        let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
+            .show(ctx, |ui| {
+
+                let svg_path  = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
+                });
+                let mut b = Board::default();
+
+                match SvgBoardInfo::from_path(svg_path.as_ref()) {
+
+                    Ok(svg_board_info) => {
+                        info!("successfully decoded SVG for board. Board has physical size:");
+                        b.svg_board_info = Some(svg_board_info);
+                        let retained_image = RetainedImage::from_color_image(
+                            "pic",
+                            b.clone().svg_board_info.unwrap().image,
+                        );
+
+                        let display_size = b.svg_board_info.unwrap().physical_size * 25.0;
+
+                        let image_rect = retained_image.show_max_size(ui, display_size).rect;
+
+                        ui.allocate_rect(image_rect, egui::Sense::hover());
+
+                        ui.horizontal(|ui| {
+                            if ui.button("Done").clicked() {
+                                self.save_new_board_info(ctx, ui);
+                                done = true;
+
+                                let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_confirmation_screen_id, true);
+                                });
+                            }
+                        });
+                    },
+                    Err(e) => {
+                        // TODO reb error handling here
+                        warn!("error with svg parsing! {:?}", e);
+                        ui.label("Error with SVG parsing");
+                        if ui.button("Pick a different file").clicked() {
+                            if let Some(svg_file_path) = FileDialog::new()
+                                .set_title("Select Image File for Board (must be .svg file)")
+                                .add_filter("SVG Filter", &["svg"])
+                                .pick_file()
+                            {
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_svg_path_id, svg_file_path);
+                                });
+                            }
+                        }
+                    },
+                };
+
+            });
+
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
+
+        if done {
+            *should_show = false;
+        }
+
+        if !*should_show {
+            let board_toml_info_id = egui::Id::new("board_toml_info");
+            ctx.data_mut(|data| {
+                data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(new_board_svg_path_id, PathBuf::new().clone());
+            });
+        }
     }
-    // TODO reb - implement display_board_png
-    pub fn display_board_png(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        // TODO Include fuctionality for user to draw circles
+
+    pub fn display_new_board_confirmation(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+
+        let response = egui::Window::new("Component Creation Successful!")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("You MUST restart the application to use the new board or component.");
+            });
+
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
+
     }
 
 
@@ -535,30 +745,6 @@ impl Project {
             let board_response = response.response;
             let pin_response = response.inner;
 
-            /* Actions for board-level stuff - red box bug
-            board_response.context_menu(|ui| {
-                ui.menu_button("pinout info", |ui| {
-                    for po in board.get_pinout().iter() {
-                        let label = format!("{:?}", po);
-                        if ui.button(label).clicked() {
-                            info!("No action coded for this yet.");
-                        }
-                    }
-                });
-                ui.menu_button("rust-analyser stuff", |ui| {
-                    for s in board.ra_values.iter() {
-                        if ui.label(format!("{:?}", s.label)).clicked() {
-                            info!("{:?}", s);
-                        }
-                    }
-                });
-                if ui.button("remove board from system").clicked() {
-                    self.system.remove_board(board.clone()).unwrap_or_else(|_| {
-                        warn!("error removing board from system.");
-                    });
-                }
-            }); */
-
             // Actions for pin-level stuff
             if let Some(pin) = pin_response {
                 info!("pin {} clicked!", pin);
@@ -675,9 +861,9 @@ impl Project {
         }).response.rect;
 
         // Show the know boards list, if needed
-        let id = egui::Id::new("show_known_boards");
+        let known_board_id = egui::Id::new("show_known_boards");
         let mut should_show_boards_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(id, false).clone()
+            data.get_temp_mut_or(known_board_id, false).clone()
 
         });
         // generate the button
@@ -692,7 +878,54 @@ impl Project {
             self.add_board(b);
         }
         ctx.data_mut(|data| {
-            data.insert_temp(id, should_show_boards_window);
+            data.insert_temp(known_board_id, should_show_boards_window);
+        });
+
+        // AUTO GENERATE BOARDS WINDOWS
+
+        // Show the generate boards window, if needed
+        let generate_boards_id = egui::Id::new("show_generate_boards");
+        let new_board_image_id = egui::Id::new("should_show_new_board_image");
+
+        let mut should_show_generate_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(generate_boards_id, false).clone()
+        });
+        let mut should_show_new_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_image_id, false).clone()
+        });
+        if should_show_generate_board_window && !should_show_new_board_window {
+            self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
+        }
+        ctx.data_mut(|data| {
+            data.insert_temp(generate_boards_id, should_show_generate_board_window);
+        });
+
+        // Show the new board window for adding pinouts, if needed
+        should_show_new_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_image_id, false).clone()
+        });
+
+        if should_show_new_board_window {
+            ctx.data_mut(|data| {
+                data.insert_temp(generate_boards_id, false);
+            });
+            self.display_new_board_png(ctx, &mut should_show_new_board_window);
+        }
+        ctx.data_mut(|data| {
+            data.insert_temp(new_board_image_id, should_show_new_board_window);
+        });
+
+        // Show the confirmation screen, if needed
+        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+        let mut should_show_confirmation = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
+        });
+
+        if should_show_confirmation {
+            self.display_new_board_confirmation(ctx, &mut should_show_confirmation);
+        }
+        ctx.data_mut(|data| {
+            data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
         });
 
         // let location_text = self.get_location();
