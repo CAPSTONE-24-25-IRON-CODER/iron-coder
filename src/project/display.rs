@@ -686,7 +686,7 @@ impl Project {
                            id=\"{}\"\n       \
                            cx=\"{}\"\n       \
                            cy=\"{}\"\n       \
-                           r=\"0.84601754\" />\n", pin_names[index], x, y);
+                           r=\"0.8\" />\n", pin_names[index], x, y);
                     pin_rects_string.push_str(pin_string.as_str());
                     index += 1;
                 }
@@ -752,6 +752,8 @@ impl Project {
                     data.get_temp_mut_or(pin_radius_id, 8.0).clone()
                 });
                 let mut b = Board::default();
+
+                //TODO reb - consider changing size fields of svg
 
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
@@ -834,13 +836,15 @@ impl Project {
                         }
 
                         ui.horizontal(|ui| {
-                            ui.label("Pin Name:");
+                            ui.label("New Pin Name:");
                             egui::TextEdit::singleline(&mut pin_name_box)
                                 .hint_text("Enter name here").show(ui);
                         });
 
-                        ui.label("Pin Radius");
-                        ui.add(egui::Slider::new(&mut pin_radius, 2.0..=15.0));
+                        ui.horizontal(|ui| {
+                            ui.label("Pin Radius: ");
+                            ui.add(egui::Slider::new(&mut pin_radius, 2.0..=15.0));
+                        });
 
                         ctx.data_mut(|data| {
                             data.insert_temp(pin_radius_id, pin_radius.clone());
