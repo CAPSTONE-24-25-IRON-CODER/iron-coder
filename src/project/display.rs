@@ -667,7 +667,6 @@ impl Project {
 
                 // TODO reb understand the errors thrown here
                 let board_name_svg = String::from(board_name_folder.clone().to_lowercase() + ".svg");
-                //let svg_res = fs::copy(svg_file_path, board_directory.join(board_name_svg));
 
                 // TODO reb understand the errors thrown here
                 let mut svg_string = match fs::read_to_string(svg_file_path) {
@@ -872,7 +871,7 @@ impl Project {
                     },
                     Err(e) => {
                         // TODO reb error handling here
-                        ui.label(format!("Error with SVG parsing: {e:?}"));
+                        ui.label(format!("Error with SVG parsing. {e:?} error thrown."));
                         if format!("{e:?}").eq("ImageNotPNG"){
                             ui.label("SVG must be derived from PNG Image");
                         }
