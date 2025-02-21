@@ -13,6 +13,10 @@ use egui::{Vec2, RichText, Label, Color32, Key, Modifiers, KeyboardShortcut, Ui}
 use::egui_extras::install_image_loaders;
 use fs_extra::dir::DirEntryAttr::Modified;
 use toml::macros::insert_toml;
+use std::process::{Command, Stdio, Child};
+use std::io::{Write, Read, BufRead, BufReader};
+use std::thread;
+use std::time::Duration;
 
 // use egui_modal::Modal;
 
@@ -104,6 +108,10 @@ pub struct IronCoderApp {
     settings: Settings,
     simulator_open: bool,
 
+    #[serde(skip)]
+    renode_process: Option<Child>,
+    renode_output: String,
+
 }
 
 impl Default for IronCoderApp {
@@ -142,6 +150,8 @@ impl Default for IronCoderApp {
                 ui_scale: 1.0,
             },
             simulator_open: false, 
+            renode_process: None,
+            renode_output: String::new(),
         }
     }
 }
@@ -176,9 +186,85 @@ impl IronCoderApp {
     }
 
     pub fn open_simulator(&mut self) {
-        self.simulator_open = true; // Assuming you have a `simulator_open` flag
+        self.simulator_open = true; 
         info!("Simulator window state set to open.");
     }
+
+
+    // stop works fine
+    fn stop_renode(&mut self) {
+        if let Some(mut child) = self.renode_process.take() {
+            if let Err(e) = child.kill() {
+                println!("Failed to stop Renode: {}", e);
+            } else {
+                println!("Renode stopped.");
+            }
+        } else {
+            println!("No Renode instance running.");
+        }
+    }
+
+    // start, you do not need the threads to run the commands
+    // more important line was the .arg("--console") to allow commands to be passed in
+    fn start_renode(&mut self) {
+        if self.renode_process.is_some() {
+            println!("Renode is already running.");
+            return;
+        }
+
+        let mut child = Command::new("renode")
+            //.arg("--disable-xwt")
+            .arg("--console")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("Failed to start Renode");
+
+        println!("Renode started!");
+
+        let stdout = child.stdout.take().expect("Failed to take stdout");
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                match line {
+                    Ok(output) => println!("Renode stdout: {}", output),
+                    Err(e) => println!("Failed to read Renode stdout: {}", e),
+                }
+            }
+        });
+
+        let stderr = child.stderr.take().expect("Failed to take stderr");
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(output) => println!("Renode stderr: {}", output),
+                    Err(e) => println!("Failed to read Renode stderr: {}", e),
+                }
+            }
+        });
+
+        self.renode_process = Some(child);
+    }
+
+    fn send_command(&mut self, command: &str) {
+        if let Some(child) = &mut self.renode_process {
+            if let Some(stdin) = child.stdin.as_mut() {
+                if let Err(e) = writeln!(stdin, "{}", command) {
+                    println!("Failed to send command to Renode: {}", e);
+                } else {
+                    println!("Command sent: {}", command);
+                }
+            } else {
+                println!("Failed to get stdin of Renode process.");
+            }
+        } else {
+            println!("No Renode instance running.");
+        }
+    }
+
+
 
     fn display_simulator_window(&mut self, ctx: &egui::Context) {
         if self.simulator_open {
@@ -187,13 +273,51 @@ impl IronCoderApp {
                 .collapsible(false)
                 .show(ctx, |ui| {
                     ui.label("Welcome to the Simulator!");
-                    // Add other simulator UI elements here
+
+                    if ui.button("Start Renode").clicked() {
+                        self.start_renode();
+                    }
+
+                    if ui.button("Load Test Script").clicked() {
+                        self.send_command("i $CWD/src/app/simulator/renode/scripts/STM32Test.resc");
+                    }
 
                     if ui.button("Close Simulator").clicked() {
-                        self.simulator_open = false; // Close the window
-                        info!("Closing simulator window");
+                        self.simulator_open = false;
+                        self.stop_renode();
+                        println!("Closing simulator window");
                     }
+
+                    ui.label("Renode Output:");
+                    ui.text_edit_multiline(&mut self.renode_output);
                 });
+
+
+
+
+                // let mut child: Child = Command::new("renode")
+                //     .stdin(Stdio::piped())
+                //     .stdout(Stdio::piped())
+                //     .spawn()
+                //     .expect("Error");
+
+                // let mut input: String = String::new();
+                // let mut exit: bool = false;
+
+                // let mut shell_in = child.stdin.take().unwrap();
+                // shell_in.write_all("i src/app/simulator/renode/scripts/STM32Test.resc".as_bytes());
+                // let mut shell_out = child.stdout.take().unwrap();
+
+                // let mut buf: Vec<u8> = Vec::new();
+
+                // shell_out.read_to_end(&mut buf).unwrap();
+
+                // println!("{}", String::from_utf8(buf).unwrap());
+
+
+                // let stdout = String::from_utf8(output.stdout).unwrap();
+                // println!("stdout: {}", stdout);
+
         }
     }
 
@@ -209,6 +333,7 @@ impl IronCoderApp {
             display_settings,
             mode,
             project,
+            simulator_open,
             ..
         } = self;
         let icons_ref: Arc<IconSet> = ctx.data_mut(|data| {
@@ -297,6 +422,14 @@ impl IronCoderApp {
                         );
                         if ui.add(ib).clicked() {
                             *display_about = !*display_about;
+                        }
+
+                        let ib = egui::widgets::Button::image_and_text(
+                            icons.get("file_icon").unwrap().clone(),
+                            "simulator"
+                        );
+                        if ui.add(ib).clicked() {
+                            *simulator_open = !*simulator_open;
                         }
 
                         let ib = egui::widgets::Button::image_and_text(

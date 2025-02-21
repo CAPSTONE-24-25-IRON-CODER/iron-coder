@@ -174,14 +174,6 @@ impl Project {
                 }
             }
 
-            // Simulator Button
-            if ui.button("Open Simulator").clicked() {
-                // Set the simulator_open flag to true when the button is clicked
-                info!("Opening simulator window");
-                //self.open_simulator(); 
-                
-            }
-
             ui.separator();
             let button = Button::image_and_text(
                 icons.get("trash_icon").unwrap().clone(),

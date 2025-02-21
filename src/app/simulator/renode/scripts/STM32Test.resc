@@ -11,7 +11,7 @@ cpu PerformanceInMips 125
 
 macro reset
 """
-    sysbus LoadELF @..\programs\Test\target\thumbv7em-none-eabihf\release\Test
+    sysbus LoadELF @src\app\simulator\programs\Test\target\thumbv7em-none-eabihf\release\Test
 
 """
 
