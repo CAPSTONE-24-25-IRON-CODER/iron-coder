@@ -89,6 +89,7 @@ SVG parser only support PNG image types
       - Previously, a confusing NoImage error was thrown when the image type was not a PNG
       - Add supporting error messages for the user when the ImageNotPNG error is thrown
         - “SVG Image must be derived from a PNG”
+    - Add Unit Tests for generating TOML File and SVG File
 
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
