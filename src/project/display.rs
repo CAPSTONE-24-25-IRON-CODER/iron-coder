@@ -794,6 +794,9 @@ impl Project {
                                                 pin_rects.remove(i);
                                                 pin_names.remove(i);
                                             }
+                                            if response.double_clicked(){
+                                                pin_names[i] = pin_name_box.clone();
+                                            }
                                         }
                                         break;
                                     }
@@ -827,14 +830,7 @@ impl Project {
                                 Some(name) => {name}
                             };
                             ui.painter().text(pin.center(), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(pin_radius * 1.25), Color32::WHITE);
-                            if ui.rect_contains_pointer(pin) {
-                                if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
-                                    // Change name if double-clicked
-                                    if response.double_clicked(){
-                                        pin_names[index] = pin_name_box.clone();
-                                    }
-                                }
-                            }
+
                             index += 1;
                         }
 
@@ -846,7 +842,7 @@ impl Project {
 
                         ui.horizontal(|ui| {
                             ui.label("Pin Radius: ");
-                            ui.add(egui::Slider::new(&mut pin_radius, 2.0..=15.0));
+                            ui.add(egui::Slider::new(&mut pin_radius, 4.0..=15.0));
                         });
 
                         ctx.data_mut(|data| {
