@@ -582,6 +582,7 @@ impl Project {
 
     pub fn clear_required_flag_messages(&mut self, ctx: &egui::Context){
         let name_required_id = egui::Id::new("name_required");
+        let name_duplicated_id = egui::Id::new("name_duplicated");
         let manufacture_required_id = egui::Id::new("manufacturer_required");
         let standard_required_id = egui::Id::new("standard_required");
         let cpu_required_id = egui::Id::new("cpu_required");
@@ -592,6 +593,9 @@ impl Project {
         let pins_required_id = egui::Id::new("pins_required");
         ctx.data_mut(|data| {
             data.insert_temp(name_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(name_duplicated_id, false);
         });
         ctx.data_mut(|data| {
             data.insert_temp(manufacture_required_id, false);
