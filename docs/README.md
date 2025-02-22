@@ -69,6 +69,27 @@
   - Simulator
       - Added simulator button and window for future use of simulation
       - Support for basic emulation of code through qemu
+# Iron Coder Work Done (Beta Build)
+- Automate Generation of Boards
+    - Add user input validation to the TOML information form
+      - Make all fields required, user can’t proceed without providing all fields
+      - Ensure user is not attempting to duplicate an existing board
+    - Add designate pinout functionality
+      - Left-clicking image adds a blue pin circle to the UI with the pin name
+      - Right-clicking an existing pin deletes it
+      - Double-clicking a pin renames it with the name in the pin name box
+      - User can change the size of all pins with the pin radius slider
+    - Information about the user’s pinouts are saved as EGUI Rects and a vector of String pin names
+    - When the user selects done, the pinout information is translated into SVG circle elements, and these are appended to the end of the SVG file
+    - When the user adds the generated board to the editor, they can access their created pins and make connections
+    - Improve error messages for user when selecting an SVG file
+      - Display the specific error that is thrown
+      - Add a new error kind (ImageNotPNG) that specifies that the SVG was not derived from a PNG
+SVG parser only support PNG image types
+      - Previously, a confusing NoImage error was thrown when the image type was not a PNG
+      - Add supporting error messages for the user when the ImageNotPNG error is thrown
+        - “SVG Image must be derived from a PNG”
+
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
@@ -79,9 +100,6 @@ parameters that are needed to describe the boards and work within the hardware e
   - Sometimes drawn wire connections will appear on top of the add board menu and other windows
   - More than one discrete component cannot be added to the hardware editor
   - Rx pin in STM32 board example does not work properly so we can only output data
-  - No user validation in place for TOML information form
-    - Unexpected behavior when fields are left blank or the board name is a duplicate
-  - Designate pinouts feature is not yet functional
-  - Error messages for SVG parsing failures are not detailed
   - Tree command in windows OS causes crash, possibly due to string variable not being able to hold data from shell output
+  - When an SVG image element is very large, it will take up the entire window and some of the window elements are not accessible (instructions and cancel button)
 
