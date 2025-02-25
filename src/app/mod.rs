@@ -19,6 +19,7 @@ use toml::macros::insert_toml;
 // Separate modules
 use crate::board;
 use crate::project::Project;
+//use crate::serial-monitor;
 
 pub mod icons;
 use icons::{
@@ -746,6 +747,9 @@ impl IronCoderApp {
 
 
     }
+    pub fn display_serial_monitor(&mut self, ctx: &egui::Context){
+
+    }
 }
 
 impl eframe::App for IronCoderApp {
@@ -830,6 +834,7 @@ impl eframe::App for IronCoderApp {
             }
         }
 
+        //self.display_serial_monitor(ctx);
         self.display_git_window(ctx);
         self.display_git_warning(ctx);
         self.display_unsaved_tab_warning(ctx);

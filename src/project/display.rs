@@ -26,6 +26,7 @@ use enum_iterator;
 use serde::{Serialize, Deserialize};
 
 use super::system;
+//use crate::serial_monitor::show;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub enum ProjectViewType {
@@ -229,6 +230,33 @@ impl Project {
                 git_things.repo = Some(repo);
             }
 
+            ui.separator();
+            /*
+            let id = egui::Id::new("show_serial_monitor");
+            let mut should_show_serial_monitor = ctx.data_mut(|data| {
+                data.get_temp_mut_or(id, false).clone()
+            });
+            */
+            if ui.button("Serial Monitor").clicked(){
+                //display serial monitor window
+
+                /*
+                should_show_serial_monitor = true;
+                ctx.data_mut(|data| {
+                    data.insert_temp(id, should_show_serial_monitor);
+                });
+                */
+                println!("Serial monitor clicked");
+                
+                /*
+                let port = serialport::new(self.com_port,self.baud_rate)
+                    .timeout(Duration::from_millis(0))
+                    .open().expect("Port opened");
+                let output = "Hello from the alpha build!".as_bytes();
+                port.write(output).expect("Success!");
+                */
+
+            }
         });
     }
 
