@@ -7,13 +7,13 @@
 use log::{error, warn, info};
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use clap::Parser;
 use egui::{Vec2, RichText, Label, Color32, Key, Modifiers, KeyboardShortcut, Ui};
 use::egui_extras::install_image_loaders;
 use fs_extra::dir::DirEntryAttr::Modified;
 use toml::macros::insert_toml;
-use std::process::{Command, Stdio, Child};
+use std::process::{Command, Stdio, Child, ChildStdin};
 use std::io::{Write, Read, BufRead, BufReader};
 use std::thread;
 use std::time::Duration;
@@ -110,7 +110,10 @@ pub struct IronCoderApp {
 
     #[serde(skip)]
     renode_process: Option<Child>,
-    renode_output: String,
+    renode_output: Arc<Mutex<String>>,
+
+    #[serde(skip)]
+    stdin: Option<Arc<Mutex<std::process::ChildStdin>>>,
 
 }
 
@@ -151,7 +154,8 @@ impl Default for IronCoderApp {
             },
             simulator_open: false, 
             renode_process: None,
-            renode_output: String::new(),
+            renode_output: Arc::new(Mutex::new(String::new())),
+            stdin: None,
         }
     }
 }
@@ -223,48 +227,77 @@ impl IronCoderApp {
 
         println!("Renode started!");
 
+        // Here we are taking the the stdin of the child process and storing it in the IronCoderApp struct
+        // This will allow us to send commands in other functions by locking the stdin and writing to it
+        let stdin = child.stdin.take().expect("Failed to get stdin of Renode process");
+        self.stdin = Some(Arc::new(Mutex::new(stdin)));
+    
+        let output_ref = Arc::clone(&self.renode_output);
         let stdout = child.stdout.take().expect("Failed to take stdout");
         thread::spawn(move || {
             let reader = BufReader::new(stdout);
             for line in reader.lines() {
                 match line {
-                    Ok(output) => println!("Renode stdout: {}", output),
+                    Ok(output) => {
+                        println!("Renode stdout: {}", output);
+                        let mut log = output_ref.lock().expect("Failed to lock output");
+                        log.push_str(&format!("{}\n", output));
+                    }
                     Err(e) => println!("Failed to read Renode stdout: {}", e),
                 }
             }
         });
-
+    
+        let output_ref = Arc::clone(&self.renode_output);
         let stderr = child.stderr.take().expect("Failed to take stderr");
         thread::spawn(move || {
             let reader = BufReader::new(stderr);
             for line in reader.lines() {
                 match line {
-                    Ok(output) => println!("Renode stderr: {}", output),
+                    Ok(output) => {
+                        println!("Renode stderr: {}", output);
+                        let mut log = output_ref.lock().expect("Failed to lock output");
+                        log.push_str(&format!("{}\n", output));
+                    }
                     Err(e) => println!("Failed to read Renode stderr: {}", e),
                 }
             }
         });
+    
 
         self.renode_process = Some(child);
+        self.start_auto_save();
     }
 
-    fn send_command(&mut self, command: &str) {
-        if let Some(child) = &mut self.renode_process {
-            if let Some(stdin) = child.stdin.as_mut() {
-                if let Err(e) = writeln!(stdin, "{}", command) {
+    fn start_auto_save(&self) {
+        let stdin = self.stdin.as_ref().expect("Renode not running").clone();
+
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_secs(300));
+                let mut stdin = stdin.lock().expect("Failed to lock stdin");
+                if let Err(e) = writeln!(stdin, "i $CWD/src/app/simulator/renode/scripts/saveState.resc") {
                     println!("Failed to send command to Renode: {}", e);
                 } else {
-                    println!("Command sent: {}", command);
+                    println!("AutoSave command sent.");
                 }
+            }
+        });
+    }
+
+    // the send command was updated to obtain the lock for the stdin to be able to send in commands to Renode
+    fn send_command(&mut self, command: &str) {
+        if let Some(stdin) = &self.stdin {
+            let mut stdin = stdin.lock().expect("Failed to lock stdin");
+            if let Err(e) = writeln!(stdin, "{}", command) {
+                println!("Failed to send command to Renode: {}", e);
             } else {
-                println!("Failed to get stdin of Renode process.");
+                println!("Command sent: {}", command);
             }
         } else {
             println!("No Renode instance running.");
         }
     }
-
-
 
     fn display_simulator_window(&mut self, ctx: &egui::Context) {
         if self.simulator_open {
@@ -289,11 +322,16 @@ impl IronCoderApp {
                     }
 
                     ui.label("Renode Output:");
-                    ui.text_edit_multiline(&mut self.renode_output);
+
+                    let log = self.renode_output.lock().expect("Failed to lock output");
+    
+                    egui::ScrollArea::vertical()
+                    .max_height(300.0) // Keeps it from taking too much space
+                    .stick_to_bottom(true) // This makes it auto-scroll!
+                    .show(ui, |ui| {
+                        ui.text_edit_multiline(&mut log.clone());
+                    });
                 });
-
-
-
 
                 // let mut child: Child = Command::new("renode")
                 //     .stdin(Stdio::piped())
