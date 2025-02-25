@@ -240,6 +240,8 @@ impl Project {
             if ui.button("Serial Monitor").clicked(){
                 //display serial monitor window
 
+                //TODO: make serial monitor display on button click
+
                 /*
                 should_show_serial_monitor = true;
                 ctx.data_mut(|data| {
