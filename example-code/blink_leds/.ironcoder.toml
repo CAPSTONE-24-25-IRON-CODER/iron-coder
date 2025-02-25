@@ -1,19 +1,23 @@
-name = "Testing"
+name = "Blink_LED"
 location = "example-code/blink_leds"
 current_view = "FileTree"
 
 [system]
+peripheral_boards = []
+discrete_components = []
 connections = []
 
 [system.main_board]
-name = "MicroMod RP2040"
-manufacturer = "Sparkfun"
-is_main_board = true
-standard = "MicroMod"
+name = "Feather RP2040"
+manufacturer = "Adafruit"
+board_type = "Main"
+standard = "Feather"
 cpu = "Cortex-M0"
 ram = 264
 flash = 8000
-required_crates = ["sparkfun_micromod_rp2040", "embedded-hal", "embedded-time", "cortex-m-rt", "cortex-m", "panic-halt"]
+bsp = "iron-coder-feather-rp2040-bsp"
+required_crates = ["adafruit-feather-rp2040", "embedded-hal", "embedded-time", "cortex-m-rt", "cortex-m", "panic-halt"]
+related_crates = ["smart-leds", "ws2812-pio"]
 
 [[system.main_board.pinout]]
 pins = ["rx", "tx"]
@@ -35,18 +39,3 @@ pins = ["mosi", "miso", "sclk"]
 [system.main_board.pinout.interface]
 iface_type = "SPI"
 direction = "Output"
-
-[[system.peripheral_boards]]
-name = "OLED Featherwing (128x64)"
-manufacturer = "Adafruit"
-is_main_board = false
-standard = "Feather"
-bsp = "iron-coder-featherwing-oled-bsp"
-related_crates = ["sh1107"]
-
-[[system.peripheral_boards.pinout]]
-pins = ["8", "9"]
-
-[system.peripheral_boards.pinout.interface]
-iface_type = "I2C"
-direction = "Input"

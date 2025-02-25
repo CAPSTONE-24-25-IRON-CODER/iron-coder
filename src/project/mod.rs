@@ -12,6 +12,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::process::Child;
+use std::process::ChildStdin;
+use std::process::ChildStdout;
 
 use rfd::FileDialog;
 
@@ -69,8 +71,12 @@ pub struct Project {
     #[serde(skip)]
     repo: Option<Repository>,
     #[serde(skip)]
-    child: Option<Child>,
+    pub terminal_app: Option<Child>,
     pub spawn_child: bool,
+    #[serde(skip)]
+    terminal_stdin: Option<ChildStdin>,
+    #[serde(skip)]
+    terminal_stdout: Option<ChildStdout>,
 }
 
 // backend functionality for Project struct

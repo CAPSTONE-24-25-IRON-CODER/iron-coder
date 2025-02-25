@@ -7,11 +7,16 @@
 use eframe::WindowBuilder;
 use egui::{widget_text, Key, Response};
 use egui_extras::RetainedImage;
+use fs_extra::file::read_to_string;
 use log::{info, warn};
+use core::f32;
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{Read, SeekFrom, Write};
+use std::os::windows::fs::FileExt;
 use std::path::Path;
 use std::sync::Arc;
+use std::fs::{self, File};
+use std::io::prelude::*;
 
 use egui::widget_text::RichText;
 use egui::widgets::Button;
@@ -79,22 +84,30 @@ impl Project {
 
     /// show the terminal pane
     pub fn display_terminal(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        let send_string = "";
-        let mut dir_path = self.get_location() + ">> ";
-        let mut at = true;
-        if self.terminal_buffer.is_empty()
+        if(!Path::new("out.txt").exists())
         {
-            self.terminal_buffer = dir_path.clone();
+            fs::File::create("out.txt");
         }
-        if self.child.is_none() {
-            self.child.insert(Command::new("cmd")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap()
-            );
+        // write output from text file to persitant buffer
+        let mut output = fs::read("out.txt").unwrap();
+        self.persistant_buffer = String::from_utf8(output).unwrap(); 
+        let mut lines = Vec::<String>::new();
+        lines = read_to_string("out.txt")
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+        let s = lines.last();
+        if(!lines.is_empty())
+        {
+            if(self.terminal_buffer.is_empty())
+            {
+                self.terminal_buffer = String::from(s.unwrap());
+            }
         }
-        
+
+
+        self.spawn_child();
         // If there is an open channel, see if we can get some data from it
         if let Some(rx) = &self.receiver {
             while let Ok(s) = rx.try_recv() {
@@ -110,6 +123,7 @@ impl Project {
                     egui::TextEdit::multiline(&mut self.persistant_buffer)
                     .interactive(false)
                     .frame(false)
+                    .desired_width(f32::INFINITY)
                 );
                 let response = ui.add(
                     egui::TextEdit::multiline(&mut self.terminal_buffer)
@@ -120,39 +134,45 @@ impl Project {
                 );
                 
                 if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
-                    // self.terminal_buffer = String::from("Enter Clicked");
+                    // parse line at carrot to get command to send to shell
                     let index = self.terminal_buffer.find('>');
-                    let index_num = index.unwrap_or(0) + 2;
-                    
-                    let output = Command::new("powershell")
-                    .arg("/C")
-                    .arg(&self.terminal_buffer[index_num..])
-                    .output()
-                    .expect("Error");
+                    let index_num = index.unwrap_or(0) + 1;
 
-                    let stdout = String::from_utf8(output.stdout).unwrap();
-
-                    self.persistant_buffer += &stdout;
-
-                    self.terminal_buffer = String::from(dir_path);
-
-                    // FUTURE USE FOR PERSITANT TERMINAL
-                    // let mut a = self.child.as_mut().take().unwrap();
-                    // let write = self.terminal_buffer[index_num..].as_bytes();
-                    // a.stdin.as_mut().unwrap().write_all(write);
-                    
-                    // let mut cmdout = a.stdout.take();
-                    // let mut buf = [0; 10000];
-                    // if !cmdout.is_none()
-                    // {
-                    //     let r = cmdout.unwrap().read(&mut buf);
-                    //     let n = r.unwrap();
-                    //     let s = String::from_utf8(buf[..n].to_vec()).unwrap();
-                    //     println!("{}", s);
-                    // }
+                    // write command from terminal buffer to child process
+                    let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
+                    self.terminal_buffer.clear();
                 }
             });
         });
+    }
+
+    // spawns terminal application if no terminal has spawned yet
+    fn spawn_child(&mut self)
+    {
+        if(!self.spawn_child)
+        {
+            self.spawn_child = true;
+            let file = File::create("out.txt").unwrap();
+            let stdio = Stdio::from(file);
+            self.terminal_app = Some(Command::new("powershell")
+            .stdin(Stdio::piped())
+            .stdout(stdio)
+            .spawn()
+            .expect("Error"));
+            self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+        }
+    }
+    // restarts terminal shell and output stream for clearing
+    fn restart_terminal(&mut self)
+    {
+        let file = File::create("out.txt").unwrap();
+        let stdio = Stdio::from(file);
+        self.terminal_app = Some(Command::new("powershell")
+        .stdin(Stdio::piped())
+        .stdout(stdio)
+        .spawn()
+        .expect("Error"));
+        self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
     }
 
     /// show the project tree in a Ui
@@ -237,6 +257,14 @@ impl Project {
             if ui.add(button).clicked() {
                 self.terminal_buffer.clear();
                 self.persistant_buffer.clear();
+                self.restart_terminal();
+            }
+
+            ui.separator();
+
+            if(ui.button("Simulate").clicked())
+            {
+                self.terminal_buffer += "\nSimulate";
             }
             // Open a window to add changes
             // Commit the changes to the git repo with a user message

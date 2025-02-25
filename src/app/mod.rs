@@ -94,7 +94,6 @@ pub struct IronCoderApp {
     display_settings: bool,
     display_boards_window: bool,
     display_example_code: bool,
-    display_simulator: bool,
     // #[serde(skip)]
     // modal: Option<Modal>,
     mode: Mode,
@@ -118,7 +117,6 @@ impl Default for IronCoderApp {
             display_settings: false,
             display_boards_window: false,
             display_example_code: false,
-            display_simulator: false,
             // modal: None,
             mode: Mode::EditProject,
             boards: boards,
@@ -190,7 +188,6 @@ impl IronCoderApp {
             display_about,
             display_settings,
             display_example_code,
-            display_simulator,
             mode,
             project,
             ..
@@ -290,13 +287,6 @@ impl IronCoderApp {
                         if ui.add(ib).clicked() {
                             *display_example_code = !*display_example_code;
                             println!("Clicjed");
-                        }
-
-                        let ib = egui::widgets::Button::image_and_text(
-                            icons.get("file_icon").unwrap().clone()
-                            , "simulate");
-                        if ui.add(ib).clicked() {
-                            *display_simulator = !*display_simulator;
                         }
 
                         let ib = egui::widgets::Button::image_and_text(
@@ -569,43 +559,6 @@ impl IronCoderApp {
                 ui.close_menu();
             }
         });
-
-    }
-
-    // This method will show the simulator window which will be used to run the simulator
-    pub fn display_simulator_window(&mut self, ctx: &egui::Context) {
-        let Self
-        {
-            display_simulator,
-            ..
-        } = self;
-        if !*display_simulator { return; }
-        let mut buffer = String::new();
-        let mut simulate = egui::Button::new("Simulate");
-        egui::Window::new("Simulator")
-        .open(display_simulator)
-        .movable(true)
-        .show(ctx, |ui|{
-            ui.add(egui::TextEdit::multiline(&mut buffer)
-            .interactive(false)
-            .frame(true));
-            let ib = ui.add(simulate);
-            if ib.clicked() 
-            {
-                // TODO: add simulator stuff from Josue
-                let output = Command::new("powershell")
-                .arg("/C")
-                .arg("./a.exe")
-                .output()
-                .expect("Error");
-
-                let text = String::from_utf8(output.stdout).unwrap();
-
-                println!("{}", text);
-            }
-        }
-        );
-
 
     }
 
@@ -886,7 +839,6 @@ impl eframe::App for IronCoderApp {
         self.display_settings_window(ctx);
         self.display_about_window(ctx);
         self.display_example_code_window(ctx);
-        self.display_simulator_window(ctx);
         self.unselected_mainboard_warning(ctx);
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
