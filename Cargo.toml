@@ -26,7 +26,7 @@ rfd = "0.14.1"
 fs_extra = "1.3.0"
 duct = "0.13.6"
 enum-iterator = "2.1.0"
-ra_ap_rust-analyzer = "0.0.220"
+ra_ap_rust-analyzer = "0.0.237"
 ra_ap_ide = "0.0.220"
 syn = { version = "2.0.25", features = ["full", "extra-traits", "parsing", "visit"] }
 quote = "1.0.29"

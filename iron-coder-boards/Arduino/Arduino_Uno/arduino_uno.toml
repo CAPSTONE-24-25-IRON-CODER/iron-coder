@@ -1,15 +1,15 @@
 
-name = "Feather RP2040"
-manufacturer = "Adafruit"
+name = "Arduino Uno"
+manufacturer = "Arduino"
 board_type = "Main"
-standard = "Feather"
-cpu = "Cortex-M0"
-ram = 264
-flash = 8000
-required_crates = ["adafruit-feather-rp2040", "embedded-hal", "embedded-time", "cortex-m-rt", "cortex-m", "panic-halt"]
+standard = "Arduino"
+cpu = "Microchip AVR"
+ram = 2
+flash = 32
+required_crates = ["avrdude", "avr-libc", "ravedude", "avr-gcc", "ufmt", "nb", "embedded-hal", "embedded-time", "panic-halt"]
 related_crates = ["smart-leds", "ws2812-pio"]
 
-bsp = "iron-coder-feather-rp2040-bsp"
+bsp = "iron-coder-uno-bsp"
 
 # Each element of the Pinout Vec should be prefaced with [[pinout]]
 [[pinout]]
