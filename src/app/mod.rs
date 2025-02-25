@@ -96,6 +96,7 @@ pub struct IronCoderApp {
     display_about: bool,
     display_settings: bool,
     display_boards_window: bool,
+    display_example_code: bool,
     // #[serde(skip)]
     // modal: Option<Modal>,
     mode: Mode,
@@ -127,6 +128,7 @@ impl Default for IronCoderApp {
             display_about: false,
             display_settings: false,
             display_boards_window: false,
+            display_example_code: false,
             // modal: None,
             mode: Mode::EditProject,
             boards: boards,
@@ -369,6 +371,7 @@ impl IronCoderApp {
         let Self {
             display_about,
             display_settings,
+            display_example_code,
             mode,
             project,
             simulator_open,
@@ -460,6 +463,14 @@ impl IronCoderApp {
                         );
                         if ui.add(ib).clicked() {
                             *display_about = !*display_about;
+                        }
+                        //TO DO: actually have button for opening example do something
+                        let ib = egui::widgets::Button::image_and_text(
+                            icons.get("file_icon").unwrap().clone(),
+                            "open example"
+                        );
+                        if ui.add(ib).clicked() {
+                            *display_example_code = !*display_example_code;
                         }
 
                         let ib = egui::widgets::Button::image_and_text(
@@ -563,7 +574,7 @@ impl IronCoderApp {
             let mut should_show_boards_window = ctx.data_mut(|data| {
                 data.get_temp_mut_or(id, false).clone()
             });
-            if ui.add(egui::Button::new("Add Board")).clicked() {
+            if ui.add(egui::Button::new("Add Component")).clicked() {
                 ui.close_menu();
                 should_show_boards_window = true;
                 ctx.data_mut(|data| {
@@ -695,6 +706,52 @@ impl IronCoderApp {
             // ctx.move_to_top(window_response.unwrap().response.layer_id);
             window_response.unwrap().response.layer_id.order = egui::Order::Foreground;
         }
+
+    }
+
+    // This method will show or hide the "example code" window
+    // TODO: have example code load when 
+    pub fn display_example_code_window(&mut self, ctx: &egui::Context) {
+        let Self {
+            display_example_code,
+            ..
+        } = self;
+        if !*display_example_code { return; }
+        let blink_leds = egui::Button::new("Blink LEDS(RP-2040)");
+        let alarm_clock = egui::Button::new("Alarm Clock(Arduino)");
+        let led_array = egui::Button::new("LED Array(RP 2040)");
+        let lcd_screen = egui::Button::new("LCD Screen (RP-2040)");
+        let traffic_light = egui::Button::new("Traffic Lights"); 
+        egui::Window::new("Pick Example Code To Load")
+        .open(display_example_code)
+        .movable(true)
+        .show( ctx, |ui| {
+            //TODO: Error handling
+            // possible new function for instead of load from since it was previously private
+            // actually make example projects, current code is from the auto generation
+            // have window close after opening example
+            let ib = ui.add(blink_leds);
+            if ib.clicked() {
+                self.project.load_from(Path::new("example-code/blink_leds"));
+                ui.close_menu();
+            }
+            if ui.add(alarm_clock).clicked() {
+                self.project.load_from(Path::new("example-code/alarm_clock"));
+                ui.close_menu();
+            }
+            if ui.add(led_array).clicked() {
+                self.project.load_from(Path::new("example-code/led_array"));
+                ui.close_menu();
+            }
+            if ui.add(lcd_screen).clicked() {
+                self.project.load_from(Path::new("example-code/lcd_screen"));
+                ui.close_menu();
+            }
+            if ui.add(traffic_light).clicked() {
+                self.project.load_from(Path::new("example-code/traffic_light"));
+                ui.close_menu();
+            }
+        });
 
     }
 
@@ -974,6 +1031,7 @@ impl eframe::App for IronCoderApp {
         // optionally render these popup windows
         self.display_settings_window(ctx);
         self.display_about_window(ctx);
+        self.display_example_code_window(ctx);
         self.unselected_mainboard_warning(ctx);
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
