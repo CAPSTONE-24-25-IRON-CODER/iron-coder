@@ -4,7 +4,6 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use eframe::WindowBuilder;
 use egui::{Color32, Key, PointerButton, Pos2, Rect, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
 use fs_extra::file::read_to_string;
@@ -17,11 +16,10 @@ use std::os::windows::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use egui::text_selection::visuals::paint_cursor;
-use std::fs::File;
-
 use egui::widget_text::RichText;
 use egui::widgets::Button;
 use git2::{Repository, StatusOptions};
+use std::fs::File;
 
 use crate::board;
 use crate::project::Project;
