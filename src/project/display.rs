@@ -5,7 +5,7 @@
 //! the system editor.
 
 use eframe::WindowBuilder;
-use egui::{Color32, widget_text, Key, PointerButton, Pos2, Rect, Response, TextBuffer, Vec2, Widget};
+use egui::{Color32, Key, PointerButton, Pos2, Rect, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
 use fs_extra::file::read_to_string;
 use log::{info, warn};
@@ -17,8 +17,7 @@ use std::os::windows::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use egui::text_selection::visuals::paint_cursor;
-use std::fs::{self, File};
-use std::io::prelude::*;
+use std::fs::File;
 
 use egui::widget_text::RichText;
 use egui::widgets::Button;
@@ -31,8 +30,6 @@ use crate::app::{Mode, Warnings, Git};
 
 use enum_iterator;
 use rfd::FileDialog;
-use std::error::Error;
-
 use serde::{Serialize, Deserialize};
 use crate::board::{Board, BoardTomlInfo};
 use crate::board::svg_reader::{Error, SvgBoardInfo};
