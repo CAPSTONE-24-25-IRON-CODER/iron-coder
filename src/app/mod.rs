@@ -476,6 +476,14 @@ impl IronCoderApp {
                         }
 
                         let ib = egui::widgets::Button::image_and_text(
+                            icons.get("file_icon").unwrap().clone(),
+                            "simulator"
+                        );
+                        if ui.add(ib).clicked() {
+                            *simulator_open = !*simulator_open;
+                        }
+
+                        let ib = egui::widgets::Button::image_and_text(
                             icons.get("quit_icon").unwrap().clone(),
                             "quit"
                         ).shortcut_text("ctrl+q");
