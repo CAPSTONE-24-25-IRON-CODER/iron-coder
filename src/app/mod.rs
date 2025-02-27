@@ -188,6 +188,8 @@ impl IronCoderApp {
             Err(e) => warn!("error reloading project from disk! {:?}", e),
         }
 
+        app.project.spawn_child = false;
+
         return app;
     }
 
@@ -489,7 +491,7 @@ impl IronCoderApp {
                         // TODO: set tint to the appropriate value for the current colorscheme
                         if ui.add(ib).clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        };
+                        }
                     });
                 });
             });
@@ -709,8 +711,7 @@ impl IronCoderApp {
 
     }
 
-    // This method will show or hide the "example code" window
-    // TODO: have example code load when 
+    // This method will show or hide the "example code" window 
     pub fn display_example_code_window(&mut self, ctx: &egui::Context) {
         let Self {
             display_example_code,

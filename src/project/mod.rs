@@ -1,6 +1,8 @@
 //! Title: Iron Coder Project Module - Module
 //! Description: This module contains the Project struct and its associated functionality.
 
+use clap::Error;
+use egui::InputState;
 use log::{info, warn, debug};
 
 // use std::error::Error;
@@ -8,6 +10,10 @@ use std::io::BufRead;
 use std::io;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process;
+use std::process::Child;
+use std::process::ChildStdin;
+use std::process::ChildStdout;
 
 use rfd::FileDialog;
 
@@ -57,6 +63,7 @@ pub struct Project {
     pub code_editor: CodeEditor,
     #[serde(skip)]
     terminal_buffer: String,
+    persistant_buffer: String,
     #[serde(skip)]
     receiver: Option<std::sync::mpsc::Receiver<String>>,
     current_view: ProjectViewType,
@@ -64,6 +71,13 @@ pub struct Project {
     pub known_boards: Vec<Board>,
     #[serde(skip)]
     repo: Option<Repository>,
+    #[serde(skip)]
+    pub terminal_app: Option<Child>,
+    pub spawn_child: bool,
+    #[serde(skip)]
+    terminal_stdin: Option<ChildStdin>,
+    #[serde(skip)]
+    terminal_stdout: Option<ChildStdout>,
 }
 
 // backend functionality for Project struct

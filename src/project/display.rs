@@ -6,15 +6,20 @@
 
 use egui::{Color32, Key, PointerButton, Pos2, Rect, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
+use fs_extra::file::read_to_string;
 use log::{info, warn};
+use core::f32;
 use std::collections::HashMap;
 use std::fs;
+use std::io::{Read, SeekFrom, Write};
+use std::os::windows::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
 use egui::widgets::Button;
 use git2::{Repository, StatusOptions};
+use std::fs::File;
 
 use crate::board;
 use crate::project::Project;
@@ -28,6 +33,8 @@ use crate::board::{Board, BoardTomlInfo};
 use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
 
+use std::process::{Command, Stdio, Child};
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub enum ProjectViewType {
     #[default]
@@ -39,7 +46,6 @@ pub enum ProjectViewType {
 // this block contains the display related
 // methods for showing the Project in egui.
 impl Project {
-
     /// Recursively display the project directory.
     /// <dir> is the starting location, <level> is the recursion depth
     fn display_directory(&mut self, dir: &Path, level: usize, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -76,29 +82,95 @@ impl Project {
 
     /// show the terminal pane
     pub fn display_terminal(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        let send_string = "";
+        if(!Path::new("out.txt").exists())
+        {
+            fs::File::create("out.txt");
+        }
+        // write output from text file to persitant buffer
+        let mut output = fs::read("out.txt").unwrap();
+        self.persistant_buffer = String::from_utf8(output).unwrap(); 
+        let mut lines = Vec::<String>::new();
+        lines = read_to_string("out.txt")
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+        let s = lines.last();
+        if(!lines.is_empty())
+        {
+            if(self.terminal_buffer.is_empty())
+            {
+                self.terminal_buffer = String::from(s.unwrap());
+            }
+        }
 
+
+        self.spawn_child();
         // If there is an open channel, see if we can get some data from it
         if let Some(rx) = &self.receiver {
             while let Ok(s) = rx.try_recv() {
                 self.terminal_buffer += s.as_str();
             }
         }
-
         egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
             egui::ScrollArea::both()
             .auto_shrink([false; 2])
             .stick_to_bottom(true)
             .show(ui, |ui| {
                 ui.add(
+                    egui::TextEdit::multiline(&mut self.persistant_buffer)
+                    .interactive(false)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+                let response = ui.add(
                     egui::TextEdit::multiline(&mut self.terminal_buffer)
                     .code_editor()
-                    .interactive(false)
+                    .interactive(true)
                     .desired_width(f32::INFINITY)
                     .frame(false)
-                )
+                );
+                
+                if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                    // parse line at carrot to get command to send to shell
+                    let index = self.terminal_buffer.find('>');
+                    let index_num = index.unwrap_or(0) + 1;
+
+                    // write command from terminal buffer to child process
+                    let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
+                    self.terminal_buffer.clear();
+                }
             });
         });
+    }
+
+    // spawns terminal application if no terminal has spawned yet
+    fn spawn_child(&mut self)
+    {
+        if(!self.spawn_child)
+        {
+            self.spawn_child = true;
+            let file = File::create("out.txt").unwrap();
+            let stdio = Stdio::from(file);
+            self.terminal_app = Some(Command::new("powershell")
+            .stdin(Stdio::piped())
+            .stdout(stdio)
+            .spawn()
+            .expect("Error"));
+            self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+        }
+    }
+    // restarts terminal shell and output stream for clearing
+    fn restart_terminal(&mut self)
+    {
+        let file = File::create("out.txt").unwrap();
+        let stdio = Stdio::from(file);
+        self.terminal_app = Some(Command::new("powershell")
+        .stdin(Stdio::piped())
+        .stdout(stdio)
+        .spawn()
+        .expect("Error"));
+        self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
     }
 
     /// show the project tree in a Ui
@@ -182,6 +254,15 @@ impl Project {
             ).frame(false);
             if ui.add(button).clicked() {
                 self.terminal_buffer.clear();
+                self.persistant_buffer.clear();
+                self.restart_terminal();
+            }
+
+            ui.separator();
+
+            if(ui.button("Simulate").clicked())
+            {
+                self.terminal_buffer += "\nSimulate";
             }
             // Open a window to add changes
             // Commit the changes to the git repo with a user message
