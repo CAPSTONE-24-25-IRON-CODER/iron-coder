@@ -462,27 +462,29 @@ impl BoardTomlInfo {
 
         self.display_required_message(ctx, ui, "standard_required");
 
-        ui.horizontal(|ui| {
-            ui.label("CPU:");
-            egui::TextEdit::singleline(&mut self.cpu)
-                .hint_text("Enter here").show(ui);
-        });
+        if self.board_type != BoardType::Discrete {
+            ui.horizontal(|ui| {
+                ui.label("CPU:");
+                egui::TextEdit::singleline(&mut self.cpu)
+                    .hint_text("Enter here").show(ui);
+            });
 
-        self.display_required_message(ctx, ui, "cpu_required");
+            self.display_required_message(ctx, ui, "cpu_required");
 
-        ui.horizontal(|ui| {
-            ui.label("Flash (kb):");
-            ui.add(egui::Slider::new(&mut self.flash, 0..=8000));
-        });
+            ui.horizontal(|ui| {
+                ui.label("Flash (kb):");
+                ui.add(egui::Slider::new(&mut self.flash, 0..=8000));
+            });
 
-        self.display_required_message(ctx, ui, "flash_required");
+            self.display_required_message(ctx, ui, "flash_required");
 
-        ui.horizontal(|ui| {
-            ui.label("RAM (kb):");
-            ui.add(egui::Slider::new(&mut self.ram, 0..=4000));
-        });
+            ui.horizontal(|ui| {
+                ui.label("RAM (kb):");
+                ui.add(egui::Slider::new(&mut self.ram, 0..=4000));
+            });
 
-        self.display_required_message(ctx, ui, "ram_required");
+            self.display_required_message(ctx, ui, "ram_required");
+        }
 
         ui.horizontal(|ui| {
             if self.required_crates.is_empty() {
@@ -607,11 +609,19 @@ impl BoardTomlInfo {
     }
 
     pub fn generate_toml_string(&self) -> String {
-        self.get_name() + self.get_manufacturer().as_str() + self.get_board_type().as_str()
-            + self.get_standard().as_str() + self.get_cpu().as_str() + self.get_ram().as_str()
-            + self.get_flash().as_str() + self.get_required_crates().as_str()
-            + self.get_related_crates().as_str() + self.get_bsp().as_str()
-            + self.get_pinouts().as_str()
+        if self.board_type != BoardType::Discrete {
+            self.get_name() + self.get_manufacturer().as_str() + self.get_board_type().as_str()
+                + self.get_standard().as_str() + self.get_cpu().as_str() + self.get_ram().as_str()
+                + self.get_flash().as_str() + self.get_required_crates().as_str()
+                + self.get_related_crates().as_str() + self.get_bsp().as_str()
+                + self.get_pinouts().as_str()
+        } else {
+            self.get_name() + self.get_manufacturer().as_str() + self.get_board_type().as_str()
+                + self.get_standard().as_str()
+                + self.get_required_crates().as_str()
+                + self.get_related_crates().as_str() + self.get_bsp().as_str()
+                + self.get_pinouts().as_str()
+        }
     }
 
     pub fn cleanup(&self, file_path: &Path) -> () {

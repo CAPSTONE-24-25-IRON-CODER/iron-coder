@@ -24,7 +24,7 @@ use crate::app::{Mode, Warnings, Git};
 use enum_iterator;
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
-use crate::board::{Board, BoardTomlInfo};
+use crate::board::{Board, BoardTomlInfo, BoardType};
 use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
 
@@ -488,7 +488,7 @@ impl Project {
                                 data.insert_temp(standard_required_id, false);
                             });
                         }
-                        if board_toml_info.cpu.is_empty() {
+                        if board_toml_info.cpu.is_empty() && board_toml_info.board_type != BoardType::Discrete {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(cpu_required_id, true);
@@ -498,7 +498,7 @@ impl Project {
                                 data.insert_temp(cpu_required_id, false);
                             });
                         }
-                        if board_toml_info.flash == 0 {
+                        if board_toml_info.flash == 0 && board_toml_info.board_type != BoardType::Discrete {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(flash_required_id, true);
@@ -508,7 +508,7 @@ impl Project {
                                 data.insert_temp(flash_required_id, false);
                             });
                         }
-                        if board_toml_info.ram == 0 {
+                        if board_toml_info.ram == 0 && board_toml_info.board_type != BoardType::Discrete{
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(ram_required_id, true);
