@@ -397,12 +397,18 @@ impl Project {
 
     pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
+        let screen_rect = ctx.input(|i: &egui::InputState| i.screen_rect());
+        let min_rect = screen_rect.shrink2(Vec2::new(100.0, 50.0));
+        let max_rect = screen_rect.shrink(40.0);
         let response = egui::Window::new("Generate TOML File")
             .open(should_show)
             .collapsible(false)
             .resizable(false)
             .movable(false)
-            .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
+            .vscroll(true)
+            .min_size(min_rect.size())
+            .max_size(max_rect.size())
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.label("Fill out all fields. Press X to cancel");
 
@@ -736,7 +742,7 @@ impl Project {
             .collapsible(false)
             .resizable(false)
             .movable(false)
-            .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
 
                 let svg_path  = ctx.data_mut(|data| {
@@ -1216,53 +1222,6 @@ impl Project {
         }
         ctx.data_mut(|data| {
             data.insert_temp(known_board_id, should_show_boards_window);
-        });
-
-        // AUTO GENERATE BOARDS WINDOWS
-
-        // Show the generate boards window, if needed
-        let generate_boards_id = egui::Id::new("show_generate_boards");
-        let new_board_image_id = egui::Id::new("should_show_new_board_image");
-
-        let mut should_show_generate_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(generate_boards_id, false).clone()
-        });
-        let mut should_show_new_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_image_id, false).clone()
-        });
-        if should_show_generate_board_window && !should_show_new_board_window {
-            self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(generate_boards_id, should_show_generate_board_window);
-        });
-
-        // Show the new board window for adding pinouts, if needed
-        should_show_new_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_image_id, false).clone()
-        });
-
-        if should_show_new_board_window {
-            ctx.data_mut(|data| {
-                data.insert_temp(generate_boards_id, false);
-            });
-            self.display_new_board_png(ctx, &mut should_show_new_board_window);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(new_board_image_id, should_show_new_board_window);
-        });
-
-        // Show the confirmation screen, if needed
-        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
-        let mut should_show_confirmation = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
-        });
-
-        if should_show_confirmation {
-            self.display_new_board_confirmation(ctx, &mut should_show_confirmation);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
         });
 
         // let location_text = self.get_location();

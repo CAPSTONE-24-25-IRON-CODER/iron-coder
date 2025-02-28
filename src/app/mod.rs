@@ -340,67 +340,122 @@ impl IronCoderApp {
 
     /// Show the various parts of the project editor
     pub fn display_project_editor(&mut self, ctx: &egui::Context) {
-        // first render the top panel with project name, buttons, etc.
-        egui::TopBottomPanel::top("project_editor_top_panel").show(ctx, |ui| {
-            if let Some(mode) = self.project.display_system_editor_top_bar(ctx, ui, &mut self.warning_flags) {
-                self.mode = mode;
-            }
+        // AUTO GENERATE BOARDS WINDOWS
+        let generate_boards_id = egui::Id::new("show_generate_boards");
+        let new_board_image_id = egui::Id::new("should_show_new_board_image");
+        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+
+        // Show the generate boards window, if needed
+        let mut should_show_generate_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(generate_boards_id, false).clone()
         });
-        // now render the central system editor panel
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // Adjust zoom level
-            let scale_id = egui::Id::new("system_editor_scale_factor");
-            let mut scale = ctx.data_mut(|data| {
-                data.get_temp_mut_or(scale_id, 5.0).clone()
-            });
-            const ZOOM_INCREMENT: f32 = 0.2;
-            scale += match ctx.input(|io| io.zoom_delta()) {
-                z if z<1.0 => { -ZOOM_INCREMENT },
-                z if z>1.0 => {  ZOOM_INCREMENT },
-                _          => {  0.0 },
-            };
-            ctx.data_mut(|data| {
-                data.insert_temp(scale_id, scale);
-            });
-            // Display the board editor
-            self.project.display_system_editor_boards(ctx, ui);
-            // Display help text for in-progress connections
-            if let Some(true) = ctx.data(|data| {
-                data.get_temp::<bool>(egui::Id::new("connection_in_progress"))
-            }) {
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                    ui.label("Click the pins to form your connection... or use ESC to cancel.");
-                });
-            }
-        // Display a context menu on right-click.
-        }).response.context_menu(|ui| {
-            let id = egui::Id::new("show_known_boards");
-            let mut should_show_boards_window = ctx.data_mut(|data| {
-                data.get_temp_mut_or(id, false).clone()
-            });
-            if ui.add(egui::Button::new("Add Component")).clicked() {
-                ui.close_menu();
-                should_show_boards_window = true;
-                ctx.data_mut(|data| {
-                    data.insert_temp(id, should_show_boards_window);
-                });
-                if let Some(b) = self.project.display_known_boards(ctx, &mut should_show_boards_window) {
-                    self.project.add_board(b);
+        let mut should_show_new_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_image_id, false).clone()
+        });
+        let mut should_show_confirmation = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
+        });
+
+        if should_show_generate_board_window || should_show_new_board_window || should_show_confirmation {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                if should_show_generate_board_window && !should_show_new_board_window {
+                    self.project.display_generate_new_board(ctx, &mut should_show_generate_board_window);
                 }
-            };
-            let id = egui::Id::new("connection_in_progress");
-            let mut connection_in_progress = ctx.data_mut(|data| {
-                data.get_temp_mut_or(id, false).clone()
-            });
-            if ui.add(egui::Button::new("Add Connection")).clicked() {
-                ui.close_menu();
-                connection_in_progress = true;
                 ctx.data_mut(|data| {
-                    data.insert_temp(id, connection_in_progress);
+                    data.insert_temp(generate_boards_id, should_show_generate_board_window);
                 });
-                // project::display::display_system_editor_boards now proceeds according to this value
-            };
-        });
+
+                // Show the new board window for adding pinouts, if needed
+                should_show_new_board_window = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(new_board_image_id, false).clone()
+                });
+
+                if should_show_new_board_window {
+                    ctx.data_mut(|data| {
+                        data.insert_temp(generate_boards_id, false);
+                    });
+                    self.project.display_new_board_png(ctx, &mut should_show_new_board_window);
+                }
+                ctx.data_mut(|data| {
+                    data.insert_temp(new_board_image_id, should_show_new_board_window);
+                });
+
+                // Show the confirmation screen, if needed
+                let mut should_show_confirmation = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
+                });
+
+                if should_show_confirmation {
+                    self.project.display_new_board_confirmation(ctx, &mut should_show_confirmation);
+                }
+                ctx.data_mut(|data| {
+                    data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
+                });
+            });
+
+        } else { // DISPLAY DEFAULT HARDWARE EDITOR
+            // first render the top panel with project name, buttons, etc.
+            egui::TopBottomPanel::top("project_editor_top_panel").show(ctx, |ui| {
+                if let Some(mode) = self.project.display_system_editor_top_bar(ctx, ui, &mut self.warning_flags) {
+                    self.mode = mode;
+                }
+            });
+            // now render the central system editor panel
+            egui::CentralPanel::default().show(ctx, |ui| {
+                // Adjust zoom level
+                let scale_id = egui::Id::new("system_editor_scale_factor");
+                let mut scale = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(scale_id, 5.0).clone()
+                });
+                const ZOOM_INCREMENT: f32 = 0.2;
+                scale += match ctx.input(|io| io.zoom_delta()) {
+                    z if z<1.0 => { -ZOOM_INCREMENT },
+                    z if z>1.0 => {  ZOOM_INCREMENT },
+                    _          => {  0.0 },
+                };
+                ctx.data_mut(|data| {
+                    data.insert_temp(scale_id, scale);
+                });
+                // Display the board editor
+                self.project.display_system_editor_boards(ctx, ui);
+                // Display help text for in-progress connections
+                if let Some(true) = ctx.data(|data| {
+                    data.get_temp::<bool>(egui::Id::new("connection_in_progress"))
+                }) {
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                        ui.label("Click the pins to form your connection... or use ESC to cancel.");
+                    });
+                }
+                // Display a context menu on right-click.
+            }).response.context_menu(|ui| {
+                let id = egui::Id::new("show_known_boards");
+                let mut should_show_boards_window = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(id, false).clone()
+                });
+                if ui.add(egui::Button::new("Add Component")).clicked() {
+                    ui.close_menu();
+                    should_show_boards_window = true;
+                    ctx.data_mut(|data| {
+                        data.insert_temp(id, should_show_boards_window);
+                    });
+                    if let Some(b) = self.project.display_known_boards(ctx, &mut should_show_boards_window) {
+                        self.project.add_board(b);
+                    }
+                };
+                let id = egui::Id::new("connection_in_progress");
+                let mut connection_in_progress = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(id, false).clone()
+                });
+                if ui.add(egui::Button::new("Add Connection")).clicked() {
+                    ui.close_menu();
+                    connection_in_progress = true;
+                    ctx.data_mut(|data| {
+                        data.insert_temp(id, connection_in_progress);
+                    });
+                    // project::display::display_system_editor_boards now proceeds according to this value
+                };
+            });
+        }
     }
 
     /// show/hide the settings window and update the appropriate app state.
