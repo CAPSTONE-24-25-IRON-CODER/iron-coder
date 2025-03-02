@@ -690,12 +690,13 @@ impl Project {
                 for pin in pin_rects{
                     let x = (pin.center().x - image_pos.clone().x)/10.0;
                     let y = (pin.center().y - image_pos.clone().y)/10.0;
+                    let radius = pin.height()/2.0/10.0;
                     let pin_string = format!("    <circle\n       \
                            style=\"fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19048\"\n       \
                            id=\"{}\"\n       \
                            cx=\"{}\"\n       \
                            cy=\"{}\"\n       \
-                           r=\"0.8\" />\n", pin_names[index], x, y);
+                           r=\"{}\" />\n", pin_names[index], x, y, radius);
                     pin_rects_string.push_str(pin_string.as_str());
                     index += 1;
                 }
@@ -761,8 +762,6 @@ impl Project {
                     data.get_temp_mut_or(pin_radius_id, 8.0).clone()
                 });
                 let mut b = Board::default();
-
-                //TODO reb - consider changing size fields of svg
 
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 

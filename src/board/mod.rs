@@ -38,6 +38,7 @@ pub enum BoardStandards {
     RaspberryPi,
     ThingPlus,
     MicroMod,
+    Components,
 }
 
 impl fmt::Display for BoardStandards {
@@ -48,6 +49,7 @@ impl fmt::Display for BoardStandards {
             BoardStandards::RaspberryPi => write!(f, "RaspberryPi"),
             BoardStandards::ThingPlus => write!(f, "ThingPlus"),
             BoardStandards::MicroMod => write!(f, "MicroMod"),
+            BoardStandards::Components => write!(f, "Components")
             // _ => write!(f, "Unknown Dev Board Standard"),
         }
     }
@@ -446,8 +448,8 @@ impl BoardTomlInfo {
         ui.horizontal(|ui| {
             ui.label("Standard:");
             if self.board_type == BoardType::Discrete {
-                self.standard = "Components".parse().unwrap();
-                ui.selectable_value(&mut self.standard, "Components".parse().unwrap(), "Components");
+                self.standard = BoardStandards::Components.to_string();
+                ui.selectable_value(&mut self.standard, BoardStandards::Components.to_string(), "Components");
             } else {
                 if self.standard.eq("Components") {
                     self.standard.clear();
