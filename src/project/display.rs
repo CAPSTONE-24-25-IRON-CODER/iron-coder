@@ -559,6 +559,9 @@ impl Project {
                                 let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
                                 let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
 
+                                // Check if SVG needs to be resized
+                                self.change_svg_size(svg_file_path.clone());
+
                                 ctx.data_mut(|data| {
                                     data.insert_temp(new_board_svg_path_id, svg_file_path);
                                 });
@@ -628,6 +631,100 @@ impl Project {
             data.insert_temp(pins_required_id, false);
         });
 
+    }
+
+    pub fn change_svg_size(&mut self, svg_file_path : PathBuf){
+        // CHECK IF WE NEED TO CHANGE SVG IMAGE SIZE
+        // TODO reb understand the errors thrown here
+        let mut svg_string = match fs::read_to_string(svg_file_path.clone()) {
+            Ok(string) => string,
+            Err(e) => String::new(),
+        };
+
+        let mut width = 0.0;
+        let mut height = 0.0;
+        let mut index = 0;
+        while let Some(width_start) = svg_string[index..].find("width=\"") {
+            let width_start = index + width_start;
+
+            // Ignore if "inkscape:window-width="
+            if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
+                index = width_start + 7;
+            } else {
+                let width_end = svg_string[width_start + 7..].find("\"").unwrap();
+                let width_value = &svg_string[width_start + 7..width_start + 7 + width_end];
+                width = width_value.parse().unwrap();
+                break;
+            }
+        }
+
+        index = 0; // Reset index for height extraction
+        while let Some(height_start) = svg_string[index..].find("height=\"") {
+            let height_start = index + height_start;
+
+            // Ignore if "inkscape:window-height="
+            if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
+                index = height_start + 8;
+            } else {
+                let height_end = svg_string[height_start + 8..].find("\"").unwrap();
+                let height_value = &svg_string[height_start + 8..height_start + 8 + height_end];
+                height = height_value.parse().unwrap();
+                break;
+            }
+        }
+
+        if width > 80.0 || height > 80.0 {
+            // MUST RESIZE
+            while width > 80.0 || height > 80.0 {
+                width = width / 2.0;
+                height = height / 2.0;
+            }
+
+            index = 0;
+            while let Some(width_start) = svg_string[index..].find("width=\"") {
+                let width_start = index + width_start;
+
+                // Ignore if "inkscape:window-width="
+                if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
+                    index = width_start + 7;
+                } else {
+                    let width_end = svg_string[width_start + 7..].find("\"").unwrap();
+                    svg_string.replace_range(width_start + 7..width_start + 7 + width_end, width.to_string().as_str());
+                    index = width_start + 7;
+                }
+            }
+
+            index = 0;
+            while let Some(height_start) = svg_string[index..].find("height=\"") {
+                let height_start = index + height_start;
+
+                // Ignore if "inkscape:window-width="
+                if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
+                    index = height_start + 8;
+                } else {
+                    let height_end = svg_string[height_start + 8..].find("\"").unwrap();
+                    svg_string.replace_range(height_start + 8..height_start + 8 + height_end, height.to_string().as_str());
+                    index = height_start + 8;
+                }
+            }
+
+            index = 0;
+            let viewbox_string = width.to_string() + " " + height.to_string().as_str();
+            if let Some(viewbox_start) = svg_string.find("viewBox=\"0 0 ") {
+                let viewbox_start = index + viewbox_start;
+
+                let viewbox_end = svg_string[viewbox_start + 13..].find("\"").unwrap();
+                svg_string.replace_range(viewbox_start + 13..viewbox_start + 13 + viewbox_end, viewbox_string.as_str());
+            }
+
+            // TODO reb understand the errors thrown here
+            let svg_res = fs::write(svg_file_path.clone(), svg_string);
+
+            match svg_res {
+                Ok(r) => {}
+                Err(e) => {info!("Create SVG file failed")}
+            }
+        }
     }
 
     // TODO reb - save_new_board_info error handling
@@ -777,7 +874,7 @@ impl Project {
 
                         let display_size = b.svg_board_info.unwrap().physical_size * 10.0;
 
-                        let image_rect = retained_image.show_max_size(ui, display_size).rect;
+                        let image_rect = retained_image.show_size(ui, display_size).rect;
 
                         ctx.data_mut(|data| {
                             data.insert_temp(image_pos_id, image_rect.left_top());
@@ -887,6 +984,9 @@ impl Project {
                                 .add_filter("SVG Filter", &["svg"])
                                 .pick_file()
                             {
+                                // Check if SVG needs to be resized
+                                self.change_svg_size(svg_file_path.clone());
+
                                 ctx.data_mut(|data| {
                                     data.insert_temp(new_board_svg_path_id, svg_file_path);
                                 });
