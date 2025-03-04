@@ -25,6 +25,7 @@ use crate::board;
 use crate::project::Project;
 use crate::app::icons::IconSet;
 use crate::app::{Mode, Warnings, Git};
+// use crate::serial_monitor::show_serial_monitor;
 
 use enum_iterator;
 use rfd::FileDialog;
@@ -32,6 +33,9 @@ use serde::{Serialize, Deserialize};
 use crate::board::{Board, BoardTomlInfo};
 use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
+//use crate::serial_monitor::show;
+
+use std::process::Command;
 
 use std::process::{Command, Stdio, Child};
 
@@ -311,6 +315,41 @@ impl Project {
                 git_things.repo = Some(repo);
             }
 
+            ui.separator();
+            /*
+            let id = egui::Id::new("show_serial_monitor");
+            let mut should_show_serial_monitor = ctx.data_mut(|data| {
+                data.get_temp_mut_or(id, false).clone()
+            });
+            */
+            if ui.button("Serial Monitor").clicked(){
+                //display serial monitor window
+
+                //TODO: make serial monitor display on button click
+
+                /*
+                should_show_serial_monitor = true;
+                ctx.data_mut(|data| {
+                    data.insert_temp(id, should_show_serial_monitor);
+                });
+                */
+                // show_serial_monitor();
+
+                let serial_app = Command::new("src/serial_monitor/serial-monitor.exe")
+                    .output()
+                    .expect("Failed to start serial monitor");
+                
+                println!("Serial monitor clicked");
+                
+                /*
+                let port = serialport::new(self.com_port,self.baud_rate)
+                    .timeout(Duration::from_millis(0))
+                    .open().expect("Port opened");
+                let output = "Hello from the alpha build!".as_bytes();
+                port.write(output).expect("Success!");
+                */
+
+            }
         });
     }
 
