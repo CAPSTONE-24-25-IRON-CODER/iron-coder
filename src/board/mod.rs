@@ -410,7 +410,7 @@ impl BoardTomlInfo {
         }
     }
 
-    pub fn update_general_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    pub fn update_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("Board Name:");
             egui::TextEdit::singleline(&mut self.name)
@@ -569,9 +569,7 @@ impl BoardTomlInfo {
                 ui.label(egui::RichText::new("Field is required. Delete empty crates").color(Color32::RED));
             });
         }
-    }
 
-    pub fn update_pinout_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let pins_required_id = egui::Id::new("pins_required");
         let mut display_pins_required : bool = ctx.data_mut(|data| {
             data.get_temp_mut_or(pins_required_id, false).clone()
