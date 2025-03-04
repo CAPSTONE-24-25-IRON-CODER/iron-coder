@@ -6,19 +6,19 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use crate::color_picker::{color_picker_widget, color_picker_window, COLORS};
-use crate::data::{DataContainer, SerialDirection};
-use crate::serial::{clear_serial_settings, save_serial_settings, Device, SerialDevices};
-use crate::settings_window::settings_window;
-use crate::toggle::toggle;
-use crate::FileOptions;
-use crate::{APP_INFO, PREFERENCES_KEY};
+use crate::serial_monitor::color_picker::{color_picker_widget, color_picker_window, COLORS};
+use crate::serial_monitor::data::{DataContainer, SerialDirection};
+use crate::serial_monitor::serial::{clear_serial_settings, save_serial_settings, Device, SerialDevices};
+use crate::serial_monitor::toggle::toggle;
+use crate::serial_monitor::FileOptions;
+use crate::serial_monitor::{APP_INFO, PREFERENCES_KEY};
 use eframe::egui::panel::Side;
 use eframe::egui::{
-    Align2, CollapsingHeader, Color32, FontFamily, FontId, KeyboardShortcut, Pos2, Sense, Ui, Vec2,
+    Align2, CollapsingHeader, Color32, FontFamily, FontId, InnerResponse, KeyboardShortcut, Pos2, Sense, Ui, Vec2, Visuals,
 };
 use eframe::{egui, Storage};
 use egui::ThemePreference;
+use egui_theme_switch::ThemeSwitch;
 use egui_file_dialog::information_panel::InformationPanel;
 use egui_file_dialog::FileDialog;
 use egui_plot::{log_grid_spacer, GridMark, Legend, Line, Plot, PlotPoint, PlotPoints};
@@ -264,7 +264,43 @@ impl SerialMonitor {
         window_feedback
     }
 
-    fn console_text(&self, packet: &crate::data::Packet) -> Option<String> {
+    fn show_settings_window(
+        ctx: &egui::Context,
+        gui_conf: &mut GuiSettingsContainer,
+        settings_window_open: &mut bool,
+    ) -> Option<InnerResponse<Option<()>>> {
+        egui::Window::new("Settings")
+            .fixed_size(Vec2 { x: 600.0, y: 200.0 })
+            .anchor(Align2::CENTER_CENTER, Vec2 { x: 0.0, y: 0.0 })
+            .collapsible(false)
+            .show(ctx, |ui| {
+                egui::Grid::new("theme settings")
+                    .striped(true)
+                    .show(ui, |ui| {
+                        if ui
+                            .add(ThemeSwitch::new(&mut gui_conf.theme_preference))
+                            .changed()
+                        {
+                            ui.ctx().set_theme(gui_conf.theme_preference);
+                        };
+                        gui_conf.dark_mode = ui.visuals() == &Visuals::dark();
+    
+                        ui.end_row();
+                        ui.end_row();
+                    });
+                ui.add_space(5.0);
+                ui.horizontal(|ui| {
+                    ui.horizontal(|ui| {
+                        if ui.button("Exit Settings").clicked() {
+                            *settings_window_open = false;
+                        }
+                    });
+    
+                });
+            })
+    }
+
+    fn console_text(&self, packet: &crate::serial_monitor::data::Packet) -> Option<String> {
         match (self.show_sent_cmds, self.show_timestamps, &packet.direction) {
             (true, true, _) => Some(format!(
                 "[{}] t + {:.3}s: {}\n",
@@ -836,7 +872,7 @@ impl SerialMonitor {
             self.settings_window_open = true;
         }
         if self.settings_window_open {
-            settings_window(
+            Self::show_settings_window(
                 ui.ctx(),
                 &mut self.gui_conf,
                 &mut self.settings_window_open,

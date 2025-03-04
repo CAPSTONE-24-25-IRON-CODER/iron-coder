@@ -7,9 +7,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
-use crate::color_picker::COLORS;
-use crate::data::{get_epoch_ms, SerialDirection};
-use crate::{Packet, APP_INFO, PREFERENCES_KEY_SERIAL};
+use crate::serial_monitor::color_picker::COLORS;
+use crate::serial_monitor::data::{get_epoch_ms, SerialDirection};
+use crate::serial_monitor::{Packet, APP_INFO, PREFERENCES_KEY_SERIAL};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerialDevices {

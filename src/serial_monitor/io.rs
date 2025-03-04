@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use csv::{ReaderBuilder, WriterBuilder};
 
-use crate::DataContainer;
+use crate::serial_monitor::DataContainer;
 
 /// A set of options for saving data to a CSV file.
 #[derive(Debug)]

@@ -20,6 +20,7 @@ use crate::board;
 use crate::project::Project;
 use crate::app::icons::IconSet;
 use crate::app::{Mode, Warnings, Git};
+// use crate::serial_monitor::show_serial_monitor;
 
 use enum_iterator;
 
@@ -27,6 +28,8 @@ use serde::{Serialize, Deserialize};
 
 use super::system;
 //use crate::serial_monitor::show;
+
+use std::process::Command;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub enum ProjectViewType {
@@ -248,6 +251,12 @@ impl Project {
                     data.insert_temp(id, should_show_serial_monitor);
                 });
                 */
+                // show_serial_monitor();
+
+                let serial_app = Command::new("src/serial_monitor/serial-monitor.exe")
+                    .output()
+                    .expect("Failed to start serial monitor");
+                
                 println!("Serial monitor clicked");
                 
                 /*
