@@ -30,7 +30,7 @@ use crate::app::{Mode, Warnings, Git};
 use enum_iterator;
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
-use crate::board::{Board, BoardTomlInfo};
+use crate::board::{Board, BoardTomlInfo, BoardType};
 use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
 //use crate::serial_monitor::show;
@@ -517,12 +517,18 @@ impl Project {
 
     pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
+        let screen_rect = ctx.input(|i: &egui::InputState| i.screen_rect());
+        let min_rect = screen_rect.shrink2(Vec2::new(100.0, 50.0));
+        let max_rect = screen_rect.shrink(40.0);
         let response = egui::Window::new("Generate TOML File")
             .open(should_show)
             .collapsible(false)
             .resizable(false)
             .movable(false)
-            .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
+            .vscroll(true)
+            .min_size(min_rect.size())
+            .max_size(max_rect.size())
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.label("Fill out all fields. Press X to cancel");
 
@@ -602,7 +608,7 @@ impl Project {
                                 data.insert_temp(standard_required_id, false);
                             });
                         }
-                        if board_toml_info.cpu.is_empty() {
+                        if board_toml_info.cpu.is_empty() && board_toml_info.board_type != BoardType::Discrete {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(cpu_required_id, true);
@@ -612,7 +618,7 @@ impl Project {
                                 data.insert_temp(cpu_required_id, false);
                             });
                         }
-                        if board_toml_info.flash == 0 {
+                        if board_toml_info.flash == 0 && board_toml_info.board_type != BoardType::Discrete {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(flash_required_id, true);
@@ -622,7 +628,7 @@ impl Project {
                                 data.insert_temp(flash_required_id, false);
                             });
                         }
-                        if board_toml_info.ram == 0 {
+                        if board_toml_info.ram == 0 && board_toml_info.board_type != BoardType::Discrete{
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(ram_required_id, true);
@@ -672,6 +678,9 @@ impl Project {
                             {
                                 let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
                                 let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+
+                                // Check if SVG needs to be resized
+                                self.change_svg_size(svg_file_path.clone());
 
                                 ctx.data_mut(|data| {
                                     data.insert_temp(new_board_svg_path_id, svg_file_path);
@@ -744,6 +753,100 @@ impl Project {
 
     }
 
+    pub fn change_svg_size(&mut self, svg_file_path : PathBuf){
+        // CHECK IF WE NEED TO CHANGE SVG IMAGE SIZE
+        // TODO reb understand the errors thrown here
+        let mut svg_string = match fs::read_to_string(svg_file_path.clone()) {
+            Ok(string) => string,
+            Err(e) => String::new(),
+        };
+
+        let mut width = 0.0;
+        let mut height = 0.0;
+        let mut index = 0;
+        while let Some(width_start) = svg_string[index..].find("width=\"") {
+            let width_start = index + width_start;
+
+            // Ignore if "inkscape:window-width="
+            if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
+                index = width_start + 7;
+            } else {
+                let width_end = svg_string[width_start + 7..].find("\"").unwrap();
+                let width_value = &svg_string[width_start + 7..width_start + 7 + width_end];
+                width = width_value.parse().unwrap();
+                break;
+            }
+        }
+
+        index = 0; // Reset index for height extraction
+        while let Some(height_start) = svg_string[index..].find("height=\"") {
+            let height_start = index + height_start;
+
+            // Ignore if "inkscape:window-height="
+            if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
+                index = height_start + 8;
+            } else {
+                let height_end = svg_string[height_start + 8..].find("\"").unwrap();
+                let height_value = &svg_string[height_start + 8..height_start + 8 + height_end];
+                height = height_value.parse().unwrap();
+                break;
+            }
+        }
+
+        if width > 80.0 || height > 80.0 {
+            // MUST RESIZE
+            while width > 80.0 || height > 80.0 {
+                width = width / 2.0;
+                height = height / 2.0;
+            }
+
+            index = 0;
+            while let Some(width_start) = svg_string[index..].find("width=\"") {
+                let width_start = index + width_start;
+
+                // Ignore if "inkscape:window-width="
+                if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
+                    index = width_start + 7;
+                } else {
+                    let width_end = svg_string[width_start + 7..].find("\"").unwrap();
+                    svg_string.replace_range(width_start + 7..width_start + 7 + width_end, width.to_string().as_str());
+                    index = width_start + 7;
+                }
+            }
+
+            index = 0;
+            while let Some(height_start) = svg_string[index..].find("height=\"") {
+                let height_start = index + height_start;
+
+                // Ignore if "inkscape:window-width="
+                if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
+                    index = height_start + 8;
+                } else {
+                    let height_end = svg_string[height_start + 8..].find("\"").unwrap();
+                    svg_string.replace_range(height_start + 8..height_start + 8 + height_end, height.to_string().as_str());
+                    index = height_start + 8;
+                }
+            }
+
+            index = 0;
+            let viewbox_string = width.to_string() + " " + height.to_string().as_str();
+            if let Some(viewbox_start) = svg_string.find("viewBox=\"0 0 ") {
+                let viewbox_start = index + viewbox_start;
+
+                let viewbox_end = svg_string[viewbox_start + 13..].find("\"").unwrap();
+                svg_string.replace_range(viewbox_start + 13..viewbox_start + 13 + viewbox_end, viewbox_string.as_str());
+            }
+
+            // TODO reb understand the errors thrown here
+            let svg_res = fs::write(svg_file_path.clone(), svg_string);
+
+            match svg_res {
+                Ok(r) => {}
+                Err(e) => {info!("Create SVG file failed")}
+            }
+        }
+    }
+
     // TODO reb - save_new_board_info error handling
     pub fn save_new_board_info(&mut self, ctx: &egui::Context) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
@@ -804,12 +907,13 @@ impl Project {
                 for pin in pin_rects{
                     let x = (pin.center().x - image_pos.clone().x)/10.0;
                     let y = (pin.center().y - image_pos.clone().y)/10.0;
+                    let radius = pin.height()/2.0/10.0;
                     let pin_string = format!("    <circle\n       \
                            style=\"fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19048\"\n       \
                            id=\"{}\"\n       \
                            cx=\"{}\"\n       \
                            cy=\"{}\"\n       \
-                           r=\"0.8\" />\n", pin_names[index], x, y);
+                           r=\"{}\" />\n", pin_names[index], x, y, radius);
                     pin_rects_string.push_str(pin_string.as_str());
                     index += 1;
                 }
@@ -856,7 +960,7 @@ impl Project {
             .collapsible(false)
             .resizable(false)
             .movable(false)
-            .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
 
                 let svg_path  = ctx.data_mut(|data| {
@@ -876,8 +980,6 @@ impl Project {
                 });
                 let mut b = Board::default();
 
-                //TODO reb - consider changing size fields of svg
-
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
                     Ok(svg_board_info) => {
@@ -892,7 +994,7 @@ impl Project {
 
                         let display_size = b.svg_board_info.unwrap().physical_size * 10.0;
 
-                        let image_rect = retained_image.show_max_size(ui, display_size).rect;
+                        let image_rect = retained_image.show_size(ui, display_size).rect;
 
                         ctx.data_mut(|data| {
                             data.insert_temp(image_pos_id, image_rect.left_top());
@@ -1002,6 +1104,9 @@ impl Project {
                                 .add_filter("SVG Filter", &["svg"])
                                 .pick_file()
                             {
+                                // Check if SVG needs to be resized
+                                self.change_svg_size(svg_file_path.clone());
+
                                 ctx.data_mut(|data| {
                                     data.insert_temp(new_board_svg_path_id, svg_file_path);
                                 });
@@ -1336,53 +1441,6 @@ impl Project {
         }
         ctx.data_mut(|data| {
             data.insert_temp(known_board_id, should_show_boards_window);
-        });
-
-        // AUTO GENERATE BOARDS WINDOWS
-
-        // Show the generate boards window, if needed
-        let generate_boards_id = egui::Id::new("show_generate_boards");
-        let new_board_image_id = egui::Id::new("should_show_new_board_image");
-
-        let mut should_show_generate_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(generate_boards_id, false).clone()
-        });
-        let mut should_show_new_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_image_id, false).clone()
-        });
-        if should_show_generate_board_window && !should_show_new_board_window {
-            self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(generate_boards_id, should_show_generate_board_window);
-        });
-
-        // Show the new board window for adding pinouts, if needed
-        should_show_new_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_image_id, false).clone()
-        });
-
-        if should_show_new_board_window {
-            ctx.data_mut(|data| {
-                data.insert_temp(generate_boards_id, false);
-            });
-            self.display_new_board_png(ctx, &mut should_show_new_board_window);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(new_board_image_id, should_show_new_board_window);
-        });
-
-        // Show the confirmation screen, if needed
-        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
-        let mut should_show_confirmation = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
-        });
-
-        if should_show_confirmation {
-            self.display_new_board_confirmation(ctx, &mut should_show_confirmation);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
         });
 
         // let location_text = self.get_location();
