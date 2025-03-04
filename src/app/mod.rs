@@ -7,12 +7,16 @@
 use log::{error, warn, info};
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use clap::Parser;
 use egui::{Vec2, RichText, Label, Color32, Key, Modifiers, KeyboardShortcut, Ui};
 use::egui_extras::install_image_loaders;
 use fs_extra::dir::DirEntryAttr::Modified;
 use toml::macros::insert_toml;
+use std::process::{Command, Stdio, Child, ChildStdin};
+use std::io::{Write, Read, BufRead, BufReader};
+use std::thread;
+use std::time::Duration;
 
 // use egui_modal::Modal;
 
@@ -93,6 +97,7 @@ pub struct IronCoderApp {
     display_about: bool,
     display_settings: bool,
     display_boards_window: bool,
+    display_example_code: bool,
     // #[serde(skip)]
     // modal: Option<Modal>,
     mode: Mode,
@@ -103,6 +108,15 @@ pub struct IronCoderApp {
     warning_flags: Warnings,
     git_things: Git,
     settings: Settings,
+    simulator_open: bool,
+
+    #[serde(skip)]
+    renode_process: Option<Child>,
+    renode_output: Arc<Mutex<String>>,
+
+    #[serde(skip)]
+    stdin: Option<Arc<Mutex<std::process::ChildStdin>>>,
+
 }
 
 impl Default for IronCoderApp {
@@ -115,6 +129,7 @@ impl Default for IronCoderApp {
             display_about: false,
             display_settings: false,
             display_boards_window: false,
+            display_example_code: false,
             // modal: None,
             mode: Mode::EditProject,
             boards: boards,
@@ -140,6 +155,10 @@ impl Default for IronCoderApp {
                 colorscheme: colorscheme::INDUSTRIAL_DARK,
                 ui_scale: 1.0,
             },
+            simulator_open: false, 
+            renode_process: None,
+            renode_output: Arc::new(Mutex::new(String::new())),
+            stdin: None,
         }
     }
 }
@@ -170,7 +189,179 @@ impl IronCoderApp {
             Err(e) => warn!("error reloading project from disk! {:?}", e),
         }
 
+        app.project.spawn_child = false;
+
         return app;
+    }
+
+    pub fn open_simulator(&mut self) {
+        self.simulator_open = true; 
+        info!("Simulator window state set to open.");
+    }
+
+
+    // stop works fine
+    fn stop_renode(&mut self) {
+        if let Some(mut child) = self.renode_process.take() {
+            if let Err(e) = child.kill() {
+                println!("Failed to stop Renode: {}", e);
+            } else {
+                println!("Renode stopped.");
+            }
+        } else {
+            println!("No Renode instance running.");
+        }
+    }
+
+    // start, you do not need the threads to run the commands
+    // more important line was the .arg("--console") to allow commands to be passed in
+    fn start_renode(&mut self) {
+        if self.renode_process.is_some() {
+            println!("Renode is already running.");
+            return;
+        }
+
+        let mut child = Command::new("renode")
+            //.arg("--disable-xwt")
+            .arg("--console")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("Failed to start Renode");
+
+        println!("Renode started!");
+
+        // Here we are taking the the stdin of the child process and storing it in the IronCoderApp struct
+        // This will allow us to send commands in other functions by locking the stdin and writing to it
+        let stdin = child.stdin.take().expect("Failed to get stdin of Renode process");
+        self.stdin = Some(Arc::new(Mutex::new(stdin)));
+    
+        let output_ref = Arc::clone(&self.renode_output);
+        let stdout = child.stdout.take().expect("Failed to take stdout");
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                match line {
+                    Ok(output) => {
+                        println!("Renode stdout: {}", output);
+                        let mut log = output_ref.lock().expect("Failed to lock output");
+                        log.push_str(&format!("{}\n", output));
+                    }
+                    Err(e) => println!("Failed to read Renode stdout: {}", e),
+                }
+            }
+        });
+    
+        let output_ref = Arc::clone(&self.renode_output);
+        let stderr = child.stderr.take().expect("Failed to take stderr");
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(output) => {
+                        println!("Renode stderr: {}", output);
+                        let mut log = output_ref.lock().expect("Failed to lock output");
+                        log.push_str(&format!("{}\n", output));
+                    }
+                    Err(e) => println!("Failed to read Renode stderr: {}", e),
+                }
+            }
+        });
+    
+
+        self.renode_process = Some(child);
+        self.start_auto_save();
+    }
+
+    fn start_auto_save(&self) {
+        let stdin = self.stdin.as_ref().expect("Renode not running").clone();
+
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_secs(300));
+                let mut stdin = stdin.lock().expect("Failed to lock stdin");
+                if let Err(e) = writeln!(stdin, "i $CWD/src/app/simulator/renode/scripts/saveState.resc") {
+                    println!("Failed to send command to Renode: {}", e);
+                } else {
+                    println!("AutoSave command sent.");
+                }
+            }
+        });
+    }
+
+    // the send command was updated to obtain the lock for the stdin to be able to send in commands to Renode
+    fn send_command(&mut self, command: &str) {
+        if let Some(stdin) = &self.stdin {
+            let mut stdin = stdin.lock().expect("Failed to lock stdin");
+            if let Err(e) = writeln!(stdin, "{}", command) {
+                println!("Failed to send command to Renode: {}", e);
+            } else {
+                println!("Command sent: {}", command);
+            }
+        } else {
+            println!("No Renode instance running.");
+        }
+    }
+
+    fn display_simulator_window(&mut self, ctx: &egui::Context) {
+        if self.simulator_open {
+            egui::Window::new("Simulator")
+                .resizable(true)
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    ui.label("Welcome to the Simulator!");
+
+                    if ui.button("Start Renode").clicked() {
+                        self.start_renode();
+                    }
+
+                    if ui.button("Load Test Script").clicked() {
+                        self.send_command("i $CWD/src/app/simulator/renode/scripts/STM32Test.resc");
+                    }
+
+                    if ui.button("Close Simulator").clicked() {
+                        self.simulator_open = false;
+                        self.stop_renode();
+                        println!("Closing simulator window");
+                    }
+
+                    ui.label("Renode Output:");
+
+                    let log = self.renode_output.lock().expect("Failed to lock output");
+    
+                    egui::ScrollArea::vertical()
+                    .max_height(300.0) // Keeps it from taking too much space
+                    .stick_to_bottom(true) // This makes it auto-scroll!
+                    .show(ui, |ui| {
+                        ui.text_edit_multiline(&mut log.clone());
+                    });
+                });
+
+                // let mut child: Child = Command::new("renode")
+                //     .stdin(Stdio::piped())
+                //     .stdout(Stdio::piped())
+                //     .spawn()
+                //     .expect("Error");
+
+                // let mut input: String = String::new();
+                // let mut exit: bool = false;
+
+                // let mut shell_in = child.stdin.take().unwrap();
+                // shell_in.write_all("i src/app/simulator/renode/scripts/STM32Test.resc".as_bytes());
+                // let mut shell_out = child.stdout.take().unwrap();
+
+                // let mut buf: Vec<u8> = Vec::new();
+
+                // shell_out.read_to_end(&mut buf).unwrap();
+
+                // println!("{}", String::from_utf8(buf).unwrap());
+
+
+                // let stdout = String::from_utf8(output.stdout).unwrap();
+                // println!("stdout: {}", stdout);
+
+        }
     }
 
     /// Set the colorscheme for the app
@@ -183,8 +374,10 @@ impl IronCoderApp {
         let Self {
             display_about,
             display_settings,
+            display_example_code,
             mode,
             project,
+            simulator_open,
             ..
         } = self;
         let icons_ref: Arc<IconSet> = ctx.data_mut(|data| {
@@ -274,6 +467,22 @@ impl IronCoderApp {
                         if ui.add(ib).clicked() {
                             *display_about = !*display_about;
                         }
+                        //TO DO: actually have button for opening example do something
+                        let ib = egui::widgets::Button::image_and_text(
+                            icons.get("file_icon").unwrap().clone(),
+                            "open example"
+                        );
+                        if ui.add(ib).clicked() {
+                            *display_example_code = !*display_example_code;
+                        }
+
+                        let ib = egui::widgets::Button::image_and_text(
+                            icons.get("file_icon").unwrap().clone(),
+                            "simulator"
+                        );
+                        if ui.add(ib).clicked() {
+                            *simulator_open = !*simulator_open;
+                        }
 
                         let ib = egui::widgets::Button::image_and_text(
                             icons.get("quit_icon").unwrap().clone(),
@@ -283,7 +492,7 @@ impl IronCoderApp {
                         // TODO: set tint to the appropriate value for the current colorscheme
                         if ui.add(ib).clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        };
+                        }
                     });
                 });
             });
@@ -368,7 +577,7 @@ impl IronCoderApp {
             let mut should_show_boards_window = ctx.data_mut(|data| {
                 data.get_temp_mut_or(id, false).clone()
             });
-            if ui.add(egui::Button::new("Add Board")).clicked() {
+            if ui.add(egui::Button::new("Add Component")).clicked() {
                 ui.close_menu();
                 should_show_boards_window = true;
                 ctx.data_mut(|data| {
@@ -500,6 +709,51 @@ impl IronCoderApp {
             // ctx.move_to_top(window_response.unwrap().response.layer_id);
             window_response.unwrap().response.layer_id.order = egui::Order::Foreground;
         }
+
+    }
+
+    // This method will show or hide the "example code" window 
+    pub fn display_example_code_window(&mut self, ctx: &egui::Context) {
+        let Self {
+            display_example_code,
+            ..
+        } = self;
+        if !*display_example_code { return; }
+        let blink_leds = egui::Button::new("Blink LEDS(RP-2040)");
+        let alarm_clock = egui::Button::new("Alarm Clock(Arduino)");
+        let led_array = egui::Button::new("LED Array(RP 2040)");
+        let lcd_screen = egui::Button::new("LCD Screen (RP-2040)");
+        let traffic_light = egui::Button::new("Traffic Lights"); 
+        egui::Window::new("Pick Example Code To Load")
+        .open(display_example_code)
+        .movable(true)
+        .show( ctx, |ui| {
+            //TODO: Error handling
+            // possible new function for instead of load from since it was previously private
+            // actually make example projects, current code is from the auto generation
+            // have window close after opening example
+            let ib = ui.add(blink_leds);
+            if ib.clicked() {
+                self.project.load_from(Path::new("example-code/blink_leds"));
+                ui.close_menu();
+            }
+            if ui.add(alarm_clock).clicked() {
+                self.project.load_from(Path::new("example-code/alarm_clock"));
+                ui.close_menu();
+            }
+            if ui.add(led_array).clicked() {
+                self.project.load_from(Path::new("example-code/led_array"));
+                ui.close_menu();
+            }
+            if ui.add(lcd_screen).clicked() {
+                self.project.load_from(Path::new("example-code/lcd_screen"));
+                ui.close_menu();
+            }
+            if ui.add(traffic_light).clicked() {
+                self.project.load_from(Path::new("example-code/traffic_light"));
+                ui.close_menu();
+            }
+        });
 
     }
 
@@ -782,9 +1036,12 @@ impl eframe::App for IronCoderApp {
         // optionally render these popup windows
         self.display_settings_window(ctx);
         self.display_about_window(ctx);
+        self.display_example_code_window(ctx);
         self.unselected_mainboard_warning(ctx);
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
+        self.display_simulator_window(ctx);
+
 
         let save_shortcut = KeyboardShortcut::new(Modifiers::CTRL, Key::S);
         let quit_shortcut = KeyboardShortcut::new(Modifiers::CTRL, Key::Q);

@@ -4,17 +4,22 @@
 //! helper functions for drawing connections between pins on
 //! the system editor.
 
-use egui::{Key, Response};
+use egui::{Color32, Key, PointerButton, Pos2, Rect, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
+use fs_extra::file::read_to_string;
 use log::{info, warn};
+use core::f32;
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs;
+use std::io::{Read, SeekFrom, Write};
+use std::os::windows::fs::FileExt;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
+use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
 use egui::widgets::Button;
-
 use git2::{Repository, StatusOptions};
+use std::fs::File;
 
 use crate::board;
 use crate::project::Project;
@@ -23,13 +28,16 @@ use crate::app::{Mode, Warnings, Git};
 // use crate::serial_monitor::show_serial_monitor;
 
 use enum_iterator;
-
+use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
-
+use crate::board::{Board, BoardTomlInfo};
+use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
 //use crate::serial_monitor::show;
 
 use std::process::Command;
+
+use std::process::{Command, Stdio, Child};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub enum ProjectViewType {
@@ -42,7 +50,6 @@ pub enum ProjectViewType {
 // this block contains the display related
 // methods for showing the Project in egui.
 impl Project {
-
     /// Recursively display the project directory.
     /// <dir> is the starting location, <level> is the recursion depth
     fn display_directory(&mut self, dir: &Path, level: usize, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -79,29 +86,95 @@ impl Project {
 
     /// show the terminal pane
     pub fn display_terminal(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        let send_string = "";
+        if(!Path::new("out.txt").exists())
+        {
+            fs::File::create("out.txt");
+        }
+        // write output from text file to persitant buffer
+        let mut output = fs::read("out.txt").unwrap();
+        self.persistant_buffer = String::from_utf8(output).unwrap(); 
+        let mut lines = Vec::<String>::new();
+        lines = read_to_string("out.txt")
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+        let s = lines.last();
+        if(!lines.is_empty())
+        {
+            if(self.terminal_buffer.is_empty())
+            {
+                self.terminal_buffer = String::from(s.unwrap());
+            }
+        }
 
+
+        self.spawn_child();
         // If there is an open channel, see if we can get some data from it
         if let Some(rx) = &self.receiver {
             while let Ok(s) = rx.try_recv() {
                 self.terminal_buffer += s.as_str();
             }
         }
-
         egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
             egui::ScrollArea::both()
             .auto_shrink([false; 2])
             .stick_to_bottom(true)
             .show(ui, |ui| {
                 ui.add(
+                    egui::TextEdit::multiline(&mut self.persistant_buffer)
+                    .interactive(false)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+                let response = ui.add(
                     egui::TextEdit::multiline(&mut self.terminal_buffer)
                     .code_editor()
-                    .interactive(false)
+                    .interactive(true)
                     .desired_width(f32::INFINITY)
                     .frame(false)
-                )
+                );
+                
+                if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                    // parse line at carrot to get command to send to shell
+                    let index = self.terminal_buffer.find('>');
+                    let index_num = index.unwrap_or(0) + 1;
+
+                    // write command from terminal buffer to child process
+                    let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
+                    self.terminal_buffer.clear();
+                }
             });
         });
+    }
+
+    // spawns terminal application if no terminal has spawned yet
+    fn spawn_child(&mut self)
+    {
+        if(!self.spawn_child)
+        {
+            self.spawn_child = true;
+            let file = File::create("out.txt").unwrap();
+            let stdio = Stdio::from(file);
+            self.terminal_app = Some(Command::new("powershell")
+            .stdin(Stdio::piped())
+            .stdout(stdio)
+            .spawn()
+            .expect("Error"));
+            self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+        }
+    }
+    // restarts terminal shell and output stream for clearing
+    fn restart_terminal(&mut self)
+    {
+        let file = File::create("out.txt").unwrap();
+        let stdio = Stdio::from(file);
+        self.terminal_app = Some(Command::new("powershell")
+        .stdin(Stdio::piped())
+        .stdout(stdio)
+        .spawn()
+        .expect("Error"));
+        self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
     }
 
     /// show the project tree in a Ui
@@ -185,6 +258,15 @@ impl Project {
             ).frame(false);
             if ui.add(button).clicked() {
                 self.terminal_buffer.clear();
+                self.persistant_buffer.clear();
+                self.restart_terminal();
+            }
+
+            ui.separator();
+
+            if(ui.button("Simulate").clicked())
+            {
+                self.terminal_buffer += "\nSimulate";
             }
             // Open a window to add changes
             // Commit the changes to the git repo with a user message
@@ -206,7 +288,7 @@ impl Project {
                 let repo_statuses = repo.statuses(Some(&mut status_options));
 
                 // Check if there are any changes or new files and save them in a vector
-                let mut changes: Vec<String> = Vec::new();
+                let mut changes: std::vec::Vec<String> = std::vec::Vec::new();
                 for entry in repo_statuses.unwrap().iter() {
                     if entry.status().contains(git2::Status::WT_NEW) || entry.status().contains(git2::Status::WT_MODIFIED)
                     || entry.status().contains(git2::Status::INDEX_MODIFIED){
@@ -382,10 +464,15 @@ impl Project {
 
     /// Display the list of available boards in a window, and return one if it was clicked
     pub fn display_known_boards(&mut self, ctx: &egui::Context, should_show: &mut bool) -> Option<board::Board> {
-
+        let id = egui::Id::new("show_generate_boards");
+        let mut should_show_generate_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(id, false).clone()
+        });
         let mut board: Option<board::Board> = None;
+        let mut boards: std::vec::Vec<Board> = self.known_boards.clone();
+        boards.sort();
         // create the window
-        let response = egui::Window::new("Boards")
+        let response = egui::Window::new("Components")
         .open(should_show)
         .collapsible(false)
         .resizable(false)
@@ -400,12 +487,20 @@ impl Project {
             }
             egui::containers::scroll_area::ScrollArea::vertical().show(ui, |ui| {
                 ui.columns(num_cols, |columns| {
-                    for (i, b) in self.known_boards.clone().into_iter().enumerate() {
+                    for (i, b) in boards.into_iter().enumerate() {
                         let col = i % num_cols;
                         // When a board is clicked, add it to the new project
-                        if columns[col].add(board::display::BoardSelectorWidget(b)).clicked() {
-                            board = Some(self.known_boards[i].clone());
+                        if columns[col].add(board::display::BoardSelectorWidget(b.clone())).clicked() {
+                            board = Some(b.clone());
                         }
+                    }
+
+                    let last_col = self.known_boards.len();
+                    if columns[last_col % num_cols].add(Button::new("Generate New Board").min_size(Vec2::new(60.0, 45.0))).clicked() {
+                        should_show_generate_board_window = true;
+                        ctx.data_mut(|data| {
+                            data.insert_temp(id, should_show_generate_board_window);
+                        });
                     }
                 });
             });
@@ -419,6 +514,556 @@ impl Project {
         return board;
 
     }
+
+    pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+        let board_toml_info_id = egui::Id::new("board_toml_info");
+        let response = egui::Window::new("Generate TOML File")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("Fill out all fields. Press X to cancel");
+
+                let mut board_toml_info = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+                });
+
+                BoardTomlInfo::update_form_UI(&mut board_toml_info, ctx, ui);
+
+                ctx.data_mut(|data| {
+                    data.insert_temp(board_toml_info_id, board_toml_info);
+                });
+
+                board_toml_info = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+                });
+
+                ui.horizontal(|ui| {
+                    if ui.button("Next").clicked() {
+                        // Input validation before move to next screen
+                        let mut invalid_field_flag : bool = false;
+                        let mut duplicate_name_flag : bool = false;
+                        let name_required_id = egui::Id::new("name_required");
+                        let name_duplicated_id = egui::Id::new("name_duplicated");
+                        let manufacture_required_id = egui::Id::new("manufacturer_required");
+                        let standard_required_id = egui::Id::new("standard_required");
+                        let cpu_required_id = egui::Id::new("cpu_required");
+                        let flash_required_id = egui::Id::new("flash_required");
+                        let ram_required_id = egui::Id::new("ram_required");
+                        let req_crates_required_id = egui::Id::new("req_crates_required");
+                        let rel_crates_required_id = egui::Id::new("rel_crates_required");
+                        let pins_required_id = egui::Id::new("pins_required");
+
+                        for board in self.known_boards.iter() {
+                            if board.get_name().to_lowercase().replace(" ", "").trim().eq(board_toml_info.name.to_lowercase().replace(" ", "").trim()){
+                                invalid_field_flag = true;
+                                duplicate_name_flag = true;
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(name_duplicated_id, true);
+                                });
+                            }
+                        }
+
+                        if !duplicate_name_flag {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(name_duplicated_id, false);
+                            });
+                        }
+
+                        if board_toml_info.name.is_empty() {
+                            invalid_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(name_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(name_required_id, false);
+                            });
+                        }
+                        if board_toml_info.manufacturer.is_empty() {
+                            invalid_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(manufacture_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(manufacture_required_id, false);
+                            });
+                        }
+                        if board_toml_info.standard.is_empty() {
+                            invalid_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(standard_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(standard_required_id, false);
+                            });
+                        }
+                        if board_toml_info.cpu.is_empty() {
+                            invalid_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(cpu_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(cpu_required_id, false);
+                            });
+                        }
+                        if board_toml_info.flash == 0 {
+                            invalid_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(flash_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(flash_required_id, false);
+                            });
+                        }
+                        if board_toml_info.ram == 0 {
+                            invalid_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(ram_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(ram_required_id, false);
+                            });
+                        }
+                        if board_toml_info.required_crates.contains(&String::new()) {
+                            invalid_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(req_crates_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(req_crates_required_id, false);
+                            });
+                        }
+                        if board_toml_info.related_crates.contains(&String::new()) {
+                            invalid_field_flag = true;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(rel_crates_required_id, true);
+                            });
+                        } else {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(rel_crates_required_id, false);
+                            });
+                        }
+
+                        for pinout in board_toml_info.pinouts {
+                            if pinout.pins.contains(&String::new()) {
+                                invalid_field_flag = true;
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(pins_required_id, true);
+                                });
+                            }
+                        }
+
+
+                        if !invalid_field_flag {
+                            self.clear_required_flag_messages(ctx);
+                            if let Some(svg_file_path) = FileDialog::new()
+                                .set_title("Select Image File for Board (must be .svg file)")
+                                .add_filter("SVG Filter", &["svg"])
+                                .pick_file()
+                            {
+                                let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
+                                let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_svg_path_id, svg_file_path);
+                                });
+
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(should_show_new_board_image_id, true);
+                                });
+                            }
+                        }
+
+                    }
+                });
+        });
+
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
+
+        if !*should_show {
+            self.clear_required_flag_messages(ctx);
+            ctx.data_mut(|data| {
+                data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
+            });
+        }
+    }
+
+    pub fn clear_required_flag_messages(&mut self, ctx: &egui::Context){
+        let name_required_id = egui::Id::new("name_required");
+        let name_duplicated_id = egui::Id::new("name_duplicated");
+        let manufacture_required_id = egui::Id::new("manufacturer_required");
+        let standard_required_id = egui::Id::new("standard_required");
+        let cpu_required_id = egui::Id::new("cpu_required");
+        let flash_required_id = egui::Id::new("flash_required");
+        let ram_required_id = egui::Id::new("ram_required");
+        let req_crates_required_id = egui::Id::new("req_crates_required");
+        let rel_crates_required_id = egui::Id::new("rel_crates_required");
+        let pins_required_id = egui::Id::new("pins_required");
+        ctx.data_mut(|data| {
+            data.insert_temp(name_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(name_duplicated_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(manufacture_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(standard_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(cpu_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(flash_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(ram_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(req_crates_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(rel_crates_required_id, false);
+        });
+        ctx.data_mut(|data| {
+            data.insert_temp(pins_required_id, false);
+        });
+
+    }
+
+    // TODO reb - save_new_board_info error handling
+    pub fn save_new_board_info(&mut self, ctx: &egui::Context) {
+        let board_toml_info_id = egui::Id::new("board_toml_info");
+        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let pin_rects_id = egui::Id::new("new_board_pin_rects");
+        let image_pos_id = egui::Id::new("image_rect_pos");
+        let pin_names_id = egui::Id::new("pin_names_id");
+        let mut board_toml_info = ctx.data_mut(|data| {
+            data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+        });
+        let svg_file_path  = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
+        });
+        let mut pin_rects : Vec<Rect>  = ctx.data_mut(|data| {
+            data.get_temp_mut_or(pin_rects_id, std::vec::Vec::new()).clone()
+        });
+        let image_pos = ctx.data_mut(|data| {
+            data.get_temp_mut_or(image_pos_id, Pos2::new(0.0,0.0)).clone()
+        });
+        let pin_names : Vec<String>  = ctx.data_mut(|data| {
+            data.get_temp_mut_or(pin_names_id, std::vec::Vec::new()).clone()
+        });
+
+
+        let mut new_board_file_path = Path::new("./iron-coder-boards");
+        let board_name_folder = String::from(board_toml_info.name.trim().replace(" ", "_"));
+        let board_name_toml = String::from(board_name_folder.clone().to_lowercase() + ".toml");
+
+        let board_directory = new_board_file_path.join(board_toml_info.manufacturer.trim().clone()).join(board_name_folder.clone());
+
+        // TODO reb understand the errors thrown here
+        let create_dir_res = fs::create_dir_all(board_directory.clone());
+        match create_dir_res {
+            Ok(r) => {
+                let binding = board_directory.join(board_name_toml);
+                new_board_file_path = binding.as_ref();
+
+                // TODO reb understand the errors thrown here
+                let toml_res = fs::write(new_board_file_path, board_toml_info.generate_toml_string());
+
+                match toml_res {
+                    Ok(r) => {}
+                    Err(e) => {info!("Create TOML file failed")}
+                }
+
+                // TODO reb understand the errors thrown here
+                let board_name_svg = String::from(board_name_folder.clone().to_lowercase() + ".svg");
+
+                // TODO reb understand the errors thrown here
+                let mut svg_string = match fs::read_to_string(svg_file_path) {
+                    Ok(string) => string,
+                    Err(e) => String::new(),
+                };
+
+                let mut pin_rects_string = String::new();
+
+                let mut index = 0;
+                for pin in pin_rects{
+                    let x = (pin.center().x - image_pos.clone().x)/10.0;
+                    let y = (pin.center().y - image_pos.clone().y)/10.0;
+                    let pin_string = format!("    <circle\n       \
+                           style=\"fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19048\"\n       \
+                           id=\"{}\"\n       \
+                           cx=\"{}\"\n       \
+                           cy=\"{}\"\n       \
+                           r=\"0.8\" />\n", pin_names[index], x, y);
+                    pin_rects_string.push_str(pin_string.as_str());
+                    index += 1;
+                }
+
+                if svg_string.contains("  </g>\n</svg>") {
+                    pin_rects_string.push_str("  </g>\n</svg>");
+                    svg_string = svg_string.replace("  </g>\n</svg>", pin_rects_string.as_str());
+
+                } else if svg_string.contains("</svg>") {
+                    pin_rects_string.push_str("</svg>");
+                    svg_string = svg_string.replace("</svg>", pin_rects_string.as_str());
+
+                } else if svg_string.is_empty() {
+                    info!("Read SVG from String failed")
+                } else {
+                    info!("Copy Pin Rects failed")
+                }
+
+                // TODO reb understand the errors thrown here
+                let svg_res = fs::write(board_directory.join(board_name_svg), svg_string);
+
+                match svg_res {
+                    Ok(r) => {}
+                    Err(e) => {info!("Create SVG file failed")}
+                }
+
+            }
+            Err(e) => {info!("Create new board directory failed")}
+        }
+
+
+    }
+
+    pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let pin_rects_id = egui::Id::new("new_board_pin_rects");
+        let pin_names_id = egui::Id::new("pin_names_id");
+        let image_pos_id = egui::Id::new("image_rect_pos");
+        let pin_radius_id = egui::Id::new("pin_radius_id");
+        let pin_name_box_id = egui::Id::new("pin_name_box_id");
+        let mut done = false;
+        let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
+            .show(ctx, |ui| {
+
+                let svg_path  = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(new_board_svg_path_id, PathBuf::new()).clone()
+                });
+                let mut pin_rects  = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pin_rects_id, std::vec::Vec::new()).clone()
+                });
+                let mut pin_names  = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pin_names_id, std::vec::Vec::new()).clone()
+                });
+                let mut pin_name_box = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pin_name_box_id, String::new()).clone()
+                });
+                let mut pin_radius = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pin_radius_id, 8.0).clone()
+                });
+                let mut b = Board::default();
+
+                //TODO reb - consider changing size fields of svg
+
+                match SvgBoardInfo::from_path(svg_path.as_ref()) {
+
+                    Ok(svg_board_info) => {
+                        ui.label("Left-Click to Add a Pin\nRight-Click to Delete an Existing Pin\nDouble-Click to Apply a New Name to the Pin");
+
+                        // Display image
+                        b.svg_board_info = Some(svg_board_info);
+                        let retained_image = RetainedImage::from_color_image(
+                            "pic",
+                            b.clone().svg_board_info.unwrap().image,
+                        );
+
+                        let display_size = b.svg_board_info.unwrap().physical_size * 10.0;
+
+                        let image_rect = retained_image.show_max_size(ui, display_size).rect;
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(image_pos_id, image_rect.left_top());
+                        });
+
+                        ui.allocate_rect(image_rect, egui::Sense::hover());
+
+                        // Designate pins
+                        if ui.ui_contains_pointer() {
+                            if let Some(cursor_origin) = ctx.pointer_latest_pos(){
+                                let mut hovering_over_pin = false;
+                                // Check all existing pins to see if cursor is hovering over (prevent overlapping pins)
+                                // Also delete pins that are right-clicked
+                                for i in 0..pin_rects.len() {
+                                    if ui.rect_contains_pointer(pin_rects[i]){
+                                        hovering_over_pin = true;
+                                        if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
+                                            if response.secondary_clicked(){
+                                                pin_rects.remove(i);
+                                                pin_names.remove(i);
+                                            }
+                                            if response.double_clicked(){
+                                                pin_names[i] = pin_name_box.clone();
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+
+                                // Display visual pin icon helper
+                                if !hovering_over_pin {
+                                    ui.painter().circle_filled(cursor_origin, pin_radius, Color32::DARK_RED);
+                                }
+                                // Add pin if left click
+                                if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
+                                    if !hovering_over_pin && response.clicked() {
+                                        let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(pin_radius * 2.0, pin_radius * 2.0));
+                                        pin_rects.push(pin_rect);
+                                        pin_names.push(format!("pin{}", pin_rects.len()))
+                                    }
+                                }
+                            }
+                        }
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_rects_id, pin_rects.clone());
+                        });
+
+                        // Display drawn pins and names
+                        let mut index = 0;
+                        for pin in pin_rects {
+                            ui.painter().circle_filled(pin.center(), pin_radius, Color32::BLUE);
+                            let name = match pin_names.get(index) {
+                                None => {"pinx"}
+                                Some(name) => {name}
+                            };
+                            ui.painter().text(pin.center(), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(pin_radius * 1.25), Color32::WHITE);
+
+                            index += 1;
+                        }
+
+                        ui.horizontal(|ui| {
+                            ui.label("New Pin Name:");
+                            egui::TextEdit::singleline(&mut pin_name_box)
+                                .hint_text("Enter name here").show(ui);
+                        });
+
+                        ui.horizontal(|ui| {
+                            ui.label("Pin Radius: ");
+                            ui.add(egui::Slider::new(&mut pin_radius, 4.0..=15.0));
+                        });
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_radius_id, pin_radius.clone());
+                        });
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_name_box_id, pin_name_box.clone());
+                        });
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_names_id, pin_names.clone());
+                        });
+
+                        ui.horizontal(|ui| {
+                            if ui.button("Done").clicked() {
+                                self.save_new_board_info(ctx);
+                                done = true;
+
+                                let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_confirmation_screen_id, true);
+                                });
+                            }
+                        });
+                    },
+                    Err(e) => {
+                        // TODO reb error handling here
+                        ui.label(format!("Error with SVG parsing. {e:?} error thrown."));
+                        if format!("{e:?}").eq("ImageNotPNG"){
+                            ui.label("SVG must be derived from PNG Image");
+                        }
+
+                        if ui.button("Pick a different file").clicked() {
+                            if let Some(svg_file_path) = FileDialog::new()
+                                .set_title("Select Image File for Board (must be .svg file)")
+                                .add_filter("SVG Filter", &["svg"])
+                                .pick_file()
+                            {
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_svg_path_id, svg_file_path);
+                                });
+                            }
+                        }
+                    },
+                };
+
+            });
+
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
+
+        if done {
+            *should_show = false;
+        }
+
+        if !*should_show {
+            let board_toml_info_id = egui::Id::new("board_toml_info");
+            ctx.data_mut(|data| {
+                data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(new_board_svg_path_id, PathBuf::new().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(pin_rects_id, Vec::<egui::Rect>::new().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(pin_name_box_id, String::new().clone());
+            });
+
+            ctx.data_mut(|data| {
+                data.insert_temp(pin_names_id, Vec::<String>::new().clone());
+            });
+        }
+    }
+
+    pub fn display_new_board_confirmation(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+
+        let response = egui::Window::new("Component Creation Successful!")
+            .open(should_show)
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("You MUST restart the application to use the new board or component.");
+            });
+
+        if response.is_some() {
+            // unwrap ok here because we check that response is Some.
+            ctx.move_to_top(response.unwrap().response.layer_id);
+        }
+
+    }
+
 
     /// Show the boards in egui "Area"s so we can move them around!
     pub fn display_system_editor_boards(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -449,6 +1094,32 @@ impl Project {
                     let display_size = svg_board_info.physical_size * scale;
 
                     let image_rect = retained_image.show_max_size(ui, display_size).rect;
+
+                    // Actions for board-level stuff -- Gets rid of red box
+                    ui.allocate_rect(image_rect, egui::Sense::hover())
+                        .context_menu(|ui| {
+                            ui.menu_button("pinout info", |ui| {
+                                for po in board.get_pinout().iter() {
+                                    let label = format!("{:?}", po);
+                                    if ui.button(label).clicked() {
+                                        info!("No action coded for this yet.");
+                                    }
+                                }
+                            });
+                            ui.menu_button("rust-analyser stuff", |ui| {
+                                for s in board.ra_values.iter() {
+                                    if ui.label(format!("{:?}", s.label)).clicked() {
+                                        info!("{:?}", s);
+                                    }
+                                }
+                            });
+                            if ui.button("remove board from system").clicked() {
+                                self.system.remove_board(board.clone()).unwrap_or_else(|_| {
+                                    warn!("error removing board from system.");
+                                });
+                            }
+                        });
+
 
                     // iterate through the pin_nodes of the board, and check if their rects (properly scaled and translated)
                     // contain the pointer. If so, actually draw the stuff there.
@@ -530,30 +1201,6 @@ impl Project {
             // extract response from board (i.e. the egui Area), and from pin
             let board_response = response.response;
             let pin_response = response.inner;
-
-            // Actions for board-level stuff
-            board_response.context_menu(|ui| {
-                ui.menu_button("pinout info", |ui| {
-                    for po in board.get_pinout().iter() {
-                        let label = format!("{:?}", po);
-                        if ui.button(label).clicked() {
-                            info!("No action coded for this yet.");
-                        }
-                    }
-                });
-                ui.menu_button("rust-analyser stuff", |ui| {
-                    for s in board.ra_values.iter() {
-                        if ui.label(format!("{:?}", s.label)).clicked() {
-                            info!("{:?}", s);
-                        }
-                    }
-                });
-                if ui.button("remove board from system").clicked() {
-                    self.system.remove_board(board.clone()).unwrap_or_else(|_| {
-                        warn!("error removing board from system.");
-                    });
-                }
-            });
 
             // Actions for pin-level stuff
             if let Some(pin) = pin_response {
@@ -671,14 +1318,14 @@ impl Project {
         }).response.rect;
 
         // Show the know boards list, if needed
-        let id = egui::Id::new("show_known_boards");
+        let known_board_id = egui::Id::new("show_known_boards");
         let mut should_show_boards_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(id, false).clone()
+            data.get_temp_mut_or(known_board_id, false).clone()
 
         });
         // generate the button
         let tid = icons.get("plus_icon").expect("error fetching plus_icon!").clone();
-        let add_board_button = egui::Button::image_and_text(tid, "add board")
+        let add_board_button = egui::Button::image_and_text(tid, "add component")
             .frame(false);
         let mut cui = ui.child_ui(top_hud_rect, egui::Layout::left_to_right(egui::Align::Center));
         if cui.add(add_board_button).clicked() {
@@ -688,7 +1335,54 @@ impl Project {
             self.add_board(b);
         }
         ctx.data_mut(|data| {
-            data.insert_temp(id, should_show_boards_window);
+            data.insert_temp(known_board_id, should_show_boards_window);
+        });
+
+        // AUTO GENERATE BOARDS WINDOWS
+
+        // Show the generate boards window, if needed
+        let generate_boards_id = egui::Id::new("show_generate_boards");
+        let new_board_image_id = egui::Id::new("should_show_new_board_image");
+
+        let mut should_show_generate_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(generate_boards_id, false).clone()
+        });
+        let mut should_show_new_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_image_id, false).clone()
+        });
+        if should_show_generate_board_window && !should_show_new_board_window {
+            self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
+        }
+        ctx.data_mut(|data| {
+            data.insert_temp(generate_boards_id, should_show_generate_board_window);
+        });
+
+        // Show the new board window for adding pinouts, if needed
+        should_show_new_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_image_id, false).clone()
+        });
+
+        if should_show_new_board_window {
+            ctx.data_mut(|data| {
+                data.insert_temp(generate_boards_id, false);
+            });
+            self.display_new_board_png(ctx, &mut should_show_new_board_window);
+        }
+        ctx.data_mut(|data| {
+            data.insert_temp(new_board_image_id, should_show_new_board_window);
+        });
+
+        // Show the confirmation screen, if needed
+        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+        let mut should_show_confirmation = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
+        });
+
+        if should_show_confirmation {
+            self.display_new_board_confirmation(ctx, &mut should_show_confirmation);
+        }
+        ctx.data_mut(|data| {
+            data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
         });
 
         // let location_text = self.get_location();
