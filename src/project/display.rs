@@ -416,7 +416,7 @@ impl Project {
                     data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
                 });
 
-                BoardTomlInfo::update_general_form_UI(&mut board_toml_info, ctx, ui);
+                BoardTomlInfo::update_form_UI(&mut board_toml_info, ctx, ui);
 
                 ctx.data_mut(|data| {
                     data.insert_temp(board_toml_info_id, board_toml_info);
@@ -538,6 +538,16 @@ impl Project {
                                 data.insert_temp(rel_crates_required_id, false);
                             });
                         }
+
+                        for pinout in board_toml_info.pinouts {
+                            if pinout.pins.contains(&String::new()) {
+                                invalid_field_flag = true;
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(pins_required_id, true);
+                                });
+                            }
+                        }
+
 
                         if !invalid_field_flag {
                             self.clear_required_flag_messages(ctx);
@@ -824,7 +834,6 @@ impl Project {
         let image_pos_id = egui::Id::new("image_rect_pos");
         let pin_radius_id = egui::Id::new("pin_radius_id");
         let pin_name_box_id = egui::Id::new("pin_name_box_id");
-        let board_toml_info_id = egui::Id::new("board_toml_info");
         let mut done = false;
         let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
             .open(should_show)
@@ -854,128 +863,112 @@ impl Project {
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
                     Ok(svg_board_info) => {
-                        ui.columns(2, |cols_ui| {
-                            // Display designate pins
-                            cols_ui[0].label("Left-Click to Add a Pin\nRight-Click to Delete an Existing Pin\nDouble-Click to Apply a New Name to the Pin");
+                        ui.label("Left-Click to Add a Pin\nRight-Click to Delete an Existing Pin\nDouble-Click to Apply a New Name to the Pin");
 
-                            // Display image
-                            b.svg_board_info = Some(svg_board_info);
-                            let retained_image = RetainedImage::from_color_image(
-                                "pic",
-                                b.clone().svg_board_info.unwrap().image,
-                            );
+                        // Display image
+                        b.svg_board_info = Some(svg_board_info);
+                        let retained_image = RetainedImage::from_color_image(
+                            "pic",
+                            b.clone().svg_board_info.unwrap().image,
+                        );
 
-                            let display_size = b.svg_board_info.unwrap().physical_size * 10.0;
+                        let display_size = b.svg_board_info.unwrap().physical_size * 10.0;
 
-                            let image_rect = retained_image.show_size(&mut cols_ui[0], display_size).rect;
+                        let image_rect = retained_image.show_size(ui, display_size).rect;
 
-                            ctx.data_mut(|data| {
-                                data.insert_temp(image_pos_id, image_rect.left_top());
-                            });
+                        ctx.data_mut(|data| {
+                            data.insert_temp(image_pos_id, image_rect.left_top());
+                        });
 
-                            cols_ui[0].allocate_rect(image_rect, egui::Sense::hover());
+                        ui.allocate_rect(image_rect, egui::Sense::hover());
 
-                            // Designate pins
-                            if cols_ui[0].ui_contains_pointer() {
-                                if let Some(cursor_origin) = ctx.pointer_latest_pos(){
-                                    let mut hovering_over_pin = false;
-                                    // Check all existing pins to see if cursor is hovering over (prevent overlapping pins)
-                                    // Also delete pins that are right-clicked
-                                    for i in 0..pin_rects.len() {
-                                        if cols_ui[0].rect_contains_pointer(pin_rects[i]){
-                                            hovering_over_pin = true;
-                                            if let response = cols_ui[0].interact(cols_ui[0].clip_rect(), cols_ui[0].id(), egui::Sense::click()) {
-                                                if response.secondary_clicked(){
-                                                    pin_rects.remove(i);
-                                                    pin_names.remove(i);
-                                                }
-                                                if response.double_clicked(){
-                                                    pin_names[i] = pin_name_box.clone();
-                                                }
+                        // Designate pins
+                        if ui.ui_contains_pointer() {
+                            if let Some(cursor_origin) = ctx.pointer_latest_pos(){
+                                let mut hovering_over_pin = false;
+                                // Check all existing pins to see if cursor is hovering over (prevent overlapping pins)
+                                // Also delete pins that are right-clicked
+                                for i in 0..pin_rects.len() {
+                                    if ui.rect_contains_pointer(pin_rects[i]){
+                                        hovering_over_pin = true;
+                                        if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
+                                            if response.secondary_clicked(){
+                                                pin_rects.remove(i);
+                                                pin_names.remove(i);
                                             }
-                                            break;
+                                            if response.double_clicked(){
+                                                pin_names[i] = pin_name_box.clone();
+                                            }
                                         }
+                                        break;
                                     }
+                                }
 
-                                    // Display visual pin icon helper
-                                    if !hovering_over_pin {
-                                        cols_ui[0].painter().circle_filled(cursor_origin, pin_radius, Color32::DARK_RED);
-                                    }
-                                    // Add pin if left click
-                                    if let response = cols_ui[0].interact(cols_ui[0].clip_rect(), cols_ui[0].id(), egui::Sense::click()) {
-                                        if !hovering_over_pin && response.clicked() {
-                                            let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(pin_radius * 2.0, pin_radius * 2.0));
-                                            pin_rects.push(pin_rect);
-                                            pin_names.push(format!("pin{}", pin_rects.len()))
-                                        }
+                                // Display visual pin icon helper
+                                if !hovering_over_pin {
+                                    ui.painter().circle_filled(cursor_origin, pin_radius, Color32::DARK_RED);
+                                }
+                                // Add pin if left click
+                                if let response = ui.interact(ui.clip_rect(), ui.id(), egui::Sense::click()) {
+                                    if !hovering_over_pin && response.clicked() {
+                                        let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(pin_radius * 2.0, pin_radius * 2.0));
+                                        pin_rects.push(pin_rect);
+                                        pin_names.push(format!("pin{}", pin_rects.len()))
                                     }
                                 }
                             }
+                        }
 
-                            ctx.data_mut(|data| {
-                                data.insert_temp(pin_rects_id, pin_rects.clone());
-                            });
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_rects_id, pin_rects.clone());
+                        });
 
-                            // Display drawn pins and names
-                            let mut index = 0;
-                            for pin in pin_rects {
-                                cols_ui[0].painter().circle_filled(pin.center(), pin_radius, Color32::BLUE);
-                                let name = match pin_names.get(index) {
-                                    None => {"pinx"}
-                                    Some(name) => {name}
-                                };
-                                cols_ui[0].painter().text(pin.center(), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(pin_radius * 1.25), Color32::WHITE);
+                        // Display drawn pins and names
+                        let mut index = 0;
+                        for pin in pin_rects {
+                            ui.painter().circle_filled(pin.center(), pin_radius, Color32::BLUE);
+                            let name = match pin_names.get(index) {
+                                None => {"pinx"}
+                                Some(name) => {name}
+                            };
+                            ui.painter().text(pin.center(), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(pin_radius * 1.25), Color32::WHITE);
 
-                                index += 1;
+                            index += 1;
+                        }
+
+                        ui.horizontal(|ui| {
+                            ui.label("New Pin Name:");
+                            egui::TextEdit::singleline(&mut pin_name_box)
+                                .hint_text("Enter name here").show(ui);
+                        });
+
+                        ui.horizontal(|ui| {
+                            ui.label("Pin Radius: ");
+                            ui.add(egui::Slider::new(&mut pin_radius, 4.0..=15.0));
+                        });
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_radius_id, pin_radius.clone());
+                        });
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_name_box_id, pin_name_box.clone());
+                        });
+
+                        ctx.data_mut(|data| {
+                            data.insert_temp(pin_names_id, pin_names.clone());
+                        });
+
+                        ui.horizontal(|ui| {
+                            if ui.button("Done").clicked() {
+                                self.save_new_board_info(ctx);
+                                done = true;
+
+                                let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(new_board_confirmation_screen_id, true);
+                                });
                             }
-
-                            cols_ui[0].horizontal(|ui| {
-                                ui.label("New Pin Name:");
-                                egui::TextEdit::singleline(&mut pin_name_box)
-                                    .hint_text("Enter name here").show(ui);
-                            });
-
-                            cols_ui[0].horizontal(|ui| {
-                                ui.label("Pin Radius: ");
-                                ui.add(egui::Slider::new(&mut pin_radius, 4.0..=15.0));
-                            });
-
-                            ctx.data_mut(|data| {
-                                data.insert_temp(pin_radius_id, pin_radius.clone());
-                            });
-
-                            ctx.data_mut(|data| {
-                                data.insert_temp(pin_name_box_id, pin_name_box.clone());
-                            });
-
-                            ctx.data_mut(|data| {
-                                data.insert_temp(pin_names_id, pin_names.clone());
-                            });
-
-                            cols_ui[0].horizontal(|ui| {
-                                if ui.button("Done").clicked() {
-                                    self.save_new_board_info(ctx);
-                                    done = true;
-
-                                    let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
-                                    ctx.data_mut(|data| {
-                                        data.insert_temp(new_board_confirmation_screen_id, true);
-                                    });
-                                }
-                            });
-
-                            // Display pinout form
-                            let mut board_toml_info = ctx.data_mut(|data| {
-                                data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
-                            });
-
-                            cols_ui[1].label("Add Pinout Information");
-                            BoardTomlInfo::update_pinout_form_UI(&mut board_toml_info, ctx, &mut cols_ui[1]);
-
-                            ctx.data_mut(|data| {
-                                data.insert_temp(board_toml_info_id, board_toml_info);
-                            });
-
                         });
                     },
                     Err(e) => {
