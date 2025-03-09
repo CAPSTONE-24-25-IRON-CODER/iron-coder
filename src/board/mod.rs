@@ -397,6 +397,16 @@ impl BoardTomlInfo {
         pinout_str
     }
 
+    pub fn get_all_pin_names(& self) -> Vec<String> {
+        let mut pin_names : Vec<String> = Vec::new();
+        for pinout in &self.pinouts{
+            for pin in &pinout.pins{
+                pin_names.push(String::from(pin));
+            }
+        }
+        pin_names
+    }
+
     pub fn display_required_message(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, flag_id: &str){
         let field_required_id = egui::Id::new(flag_id);
         let mut display_name_required : bool = ctx.data_mut(|data| {
@@ -581,11 +591,11 @@ impl BoardTomlInfo {
             if self.pinouts.is_empty() {
                 self.pinouts.push(PinoutTomlInfo::default());
             }
-            ui.label("PINOUTS");
 
             ui.vertical(|ui| {
                 let mut n : usize = 0;
                 while n < self.pinouts.len() {
+                    ui.label(format!("PINOUT #{}", n + 1));
                     ui.horizontal(|ui| {
                         PinoutTomlInfo::update_form_UI(&mut self.pinouts[n], ctx, ui);
                         if self.pinouts.len() != 1 {
@@ -599,7 +609,7 @@ impl BoardTomlInfo {
                     });
                     if display_pins_required && self.pinouts[n].pins.contains(&String::new()) {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Field is required. Delete empty pins").color(Color32::RED));
+                            ui.label(egui::RichText::new("Field is required. Replace or delete empty pins").color(Color32::RED));
                         });
                     }
                     if n == self.pinouts.len() -1 && ui.button("Add Pinout").clicked() {

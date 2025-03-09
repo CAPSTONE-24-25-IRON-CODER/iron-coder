@@ -398,8 +398,8 @@ impl Project {
     pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
         let screen_rect = ctx.input(|i: &egui::InputState| i.screen_rect());
-        let min_rect = screen_rect.shrink2(Vec2::new(100.0, 50.0));
-        let max_rect = screen_rect.shrink(40.0);
+        let min_rect = screen_rect.shrink2(Vec2::new(100.0, 60.0));
+        let max_rect = screen_rect.shrink(50.0);
         let response = egui::Window::new("Generate TOML File")
             .open(should_show)
             .collapsible(false)
@@ -427,7 +427,7 @@ impl Project {
                 });
 
                 ui.horizontal(|ui| {
-                    if ui.button("Next").clicked() {
+                    if ui.button("Next - Select Board Image").clicked() {
                         // Input validation before move to next screen
                         let mut invalid_field_flag : bool = false;
                         let mut duplicate_name_flag : bool = false;
@@ -440,7 +440,6 @@ impl Project {
                         let ram_required_id = egui::Id::new("ram_required");
                         let req_crates_required_id = egui::Id::new("req_crates_required");
                         let rel_crates_required_id = egui::Id::new("rel_crates_required");
-                        let pins_required_id = egui::Id::new("pins_required");
 
                         for board in self.known_boards.iter() {
                             if board.get_name().to_lowercase().replace(" ", "").trim().eq(board_toml_info.name.to_lowercase().replace(" ", "").trim()){
@@ -542,7 +541,7 @@ impl Project {
                         if !invalid_field_flag {
                             self.clear_required_flag_messages(ctx);
                             if let Some(svg_file_path) = FileDialog::new()
-                                .set_title("Select Image File for Board (must be .svg file)")
+                                .set_title("Select Image File for Board (File Type Must be SVG)")
                                 .add_filter("SVG Filter", &["svg"])
                                 .pick_file()
                             {
@@ -663,9 +662,9 @@ impl Project {
             }
         }
 
-        if width > 80.0 || height > 80.0 {
+        if width > 64.0 || height > 64.0 {
             // MUST RESIZE
-            while width > 80.0 || height > 80.0 {
+            while width > 64.0 || height > 64.0 {
                 width = width / 2.0;
                 height = height / 2.0;
             }
@@ -825,12 +824,17 @@ impl Project {
         let pin_radius_id = egui::Id::new("pin_radius_id");
         let pin_name_box_id = egui::Id::new("pin_name_box_id");
         let board_toml_info_id = egui::Id::new("board_toml_info");
+        let pins_required_id = egui::Id::new("pins_required");
+        let screen_rect = ctx.input(|i: &egui::InputState| i.screen_rect());
+        let max_rect = screen_rect.shrink(50.0);
         let mut done = false;
         let response = egui::Window::new("Designate Pinouts (Press X to cancel)")
             .open(should_show)
             .collapsible(false)
             .resizable(false)
             .movable(false)
+            .vscroll(true)
+            .max_height(max_rect.height())
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
 
@@ -849,14 +853,34 @@ impl Project {
                 let mut pin_radius = ctx.data_mut(|data| {
                     data.get_temp_mut_or(pin_radius_id, 8.0).clone()
                 });
+                let mut pins_required = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(pins_required_id, false).clone()
+                });
                 let mut b = Board::default();
 
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
                     Ok(svg_board_info) => {
-                        ui.columns(2, |cols_ui| {
+                        let available_width = max_rect.width();
+                        let mut num_cols = 2;
+                        if available_width < 640.0 * 2.0 {
+                            num_cols = 1;
+                        }
+                        ui.columns(num_cols, |cols_ui| {
                             // Display designate pins
-                            cols_ui[0].label("Left-Click to Add a Pin\nRight-Click to Delete an Existing Pin\nDouble-Click to Apply a New Name to the Pin");
+                            cols_ui[0].horizontal(|ui_h| {
+                                ui_h.label(RichText::new("Add Pin:").underline());
+                                ui_h.label(" Left-Click anywhere on image");
+                            });
+                            cols_ui[0].horizontal(|ui_h| {
+                                ui_h.label(RichText::new("Delete Pin:").underline());
+                                ui_h.label(" Right-Click existing pin");
+                            });
+                            cols_ui[0].horizontal(|ui_h| {
+                                ui_h.label(RichText::new("Apply a New Name to Pin:").underline());
+                                ui_h.label(" Select a Name and Double-Click existing pin");
+                            });
+
 
                             // Display image
                             b.svg_board_info = Some(svg_board_info);
@@ -929,10 +953,27 @@ impl Project {
                                 index += 1;
                             }
 
+                            let mut board_toml_info = ctx.data_mut(|data| {
+                                data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
+                            });
+                            let pin_names_dropdown = board_toml_info.get_all_pin_names();
+
                             cols_ui[0].horizontal(|ui| {
-                                ui.label("New Pin Name:");
-                                egui::TextEdit::singleline(&mut pin_name_box)
-                                    .hint_text("Enter name here").show(ui);
+                                ui.label("Pin Name List:");
+                                egui::ComboBox::from_label("Select pin name then double-click pin to apply!")
+                                    .selected_text(format!("{:?}", pin_name_box))
+                                    .show_ui(ui, |ui| {
+                                        if pin_names_dropdown.len() == 0 || ( pin_names_dropdown.len() == 1 && pin_names_dropdown[0].is_empty() ) {
+                                            let mut unused= "Add pins to pin information form!";
+                                            ui.selectable_value(&mut unused,"Add pins to pin information form!", "Cannot select name. Add pin names in the pin information form!");
+                                        }
+                                        for pin in pin_names_dropdown{
+                                            if !pin.is_empty(){
+                                                ui.selectable_value(&mut pin_name_box, pin.clone(), pin.clone());
+                                            }
+                                        }
+                                    }
+                                    );
                             });
 
                             cols_ui[0].horizontal(|ui| {
@@ -953,24 +994,35 @@ impl Project {
                             });
 
                             cols_ui[0].horizontal(|ui| {
-                                if ui.button("Done").clicked() {
-                                    self.save_new_board_info(ctx);
-                                    done = true;
+                                let pin_rects : Vec<Rect>  = ctx.data_mut(|data| {
+                                    data.get_temp_mut_or(pin_rects_id, std::vec::Vec::new()).clone()
+                                });
+                                let pin_names_form = board_toml_info.get_all_pin_names();
+                                if ui.button("Done - Generate Board").clicked() {
+                                    if pin_names_form.len() == 0 || ( pin_names_form.len() == 1 && pin_names_form[0].is_empty() ) || pin_rects.is_empty() || pin_names_form.contains(&String::new()) {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(pins_required_id, true);
+                                        });
+                                    } else {
+                                        self.save_new_board_info(ctx);
+                                        done = true;
 
-                                    let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
-                                    ctx.data_mut(|data| {
-                                        data.insert_temp(new_board_confirmation_screen_id, true);
-                                    });
+                                        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(new_board_confirmation_screen_id, true);
+                                        });
+                                    }
                                 }
                             });
 
-                            // Display pinout form
-                            let mut board_toml_info = ctx.data_mut(|data| {
-                                data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
-                            });
+                            if pins_required {
+                                cols_ui[0].label(RichText::new("Resolve all errors.\nNote: Must designate at least one pin. Add pin name to form and click image to designate pin location.").color(Color32::RED));
+                            }
 
-                            cols_ui[1].label("Add Pinout Information");
-                            BoardTomlInfo::update_pinout_form_UI(&mut board_toml_info, ctx, &mut cols_ui[1]);
+                            // Display pinout form
+
+                            cols_ui[1 % num_cols].add(egui::Label::new(RichText::new("Add Pinout Information").underline()));
+                            BoardTomlInfo::update_pinout_form_UI(&mut board_toml_info, ctx, &mut cols_ui[1 % num_cols]);
 
                             ctx.data_mut(|data| {
                                 data.insert_temp(board_toml_info_id, board_toml_info);
