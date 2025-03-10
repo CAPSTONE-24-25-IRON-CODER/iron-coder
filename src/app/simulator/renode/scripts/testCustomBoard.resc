@@ -18,7 +18,7 @@ macro reset
 
 runMacro $reset
 
-logFile $ORIGIN\..\logs\output.txt
+logFile $ORIGIN\output.txt
 
 showAnalyzer sysbus.usart2
 
