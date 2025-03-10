@@ -86,30 +86,51 @@ impl Project {
         {
             fs::File::create("out.txt");
         }
+        self.spawn_child();
         // write output from text file to persitant buffer
-        let mut output = fs::read("out.txt").unwrap();
-        self.persistant_buffer = String::from_utf8(output).unwrap(); 
+        let mut output = fs::read("out.txt").unwrap(); 
         let mut lines = Vec::<String>::new();
         lines = read_to_string("out.txt")
         .unwrap()
         .lines()
         .map(String::from)
         .collect();
-        let s = lines.last();
+        let mut s = lines.last();
         if(!lines.is_empty())
         {
+            if(!s.unwrap().contains(">"))
+            {
+                // read again (prevents input line from getting messed up?)
+                lines = read_to_string("out.txt")
+                .unwrap()
+                .lines()
+                .map(String::from)
+                .collect();
+    
+                s = lines.last();
+            }
+
             if(self.terminal_buffer.is_empty())
             {
                 self.terminal_buffer = String::from(s.unwrap());
             }
         }
-
-
-        self.spawn_child();
+        if(!self.terminal_buffer.is_empty())
+        {
+            if(self.terminal_buffer.len() < String::from(s.unwrap()).len())
+            {
+                self.terminal_buffer = String::from(s.unwrap());
+            }
+        }
+        if(!lines.is_empty())
+        {
+            lines.remove(lines.len() - 1);
+        }
+        self.persistant_buffer = lines.join("\n");
         // If there is an open channel, see if we can get some data from it
         if let Some(rx) = &self.receiver {
             while let Ok(s) = rx.try_recv() {
-                self.terminal_buffer += s.as_str();
+                self.output_buffer += s.as_str();
             }
         }
         egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
@@ -142,8 +163,22 @@ impl Project {
                 }
             });
         });
-    }
 
+        egui::CollapsingHeader::new("Output").show(ui, |ui| {
+            egui::ScrollArea::both()
+            .auto_shrink([false; 2])
+            .stick_to_bottom(true)
+            .show(ui, |ui|
+            {
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.output_buffer)
+                    .interactive(false)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+            })
+        });
+    }
     // spawns terminal application if no terminal has spawned yet
     fn spawn_child(&mut self)
     {
@@ -256,13 +291,14 @@ impl Project {
                 self.terminal_buffer.clear();
                 self.persistant_buffer.clear();
                 self.restart_terminal();
+                self.output_buffer.clear();
             }
 
             ui.separator();
 
             if(ui.button("Simulate").clicked())
             {
-                self.terminal_buffer += "\nSimulate";
+                self.output_buffer += "\nSimulate";
             }
             // Open a window to add changes
             // Commit the changes to the git repo with a user message
@@ -365,7 +401,7 @@ impl Project {
                                             let cmd = duct::cmd!("cargo", "-Z", "unstable-options", "-C", path.as_path().to_str().unwrap(), "add", rc.as_str());
                                             self.run_background_commands(&[cmd], ctx);
                                         } else {
-                                            self.terminal_buffer += "save project first!\n";
+                                            self.output_buffer += "save project first!\n";
                                         }
 
                                     };

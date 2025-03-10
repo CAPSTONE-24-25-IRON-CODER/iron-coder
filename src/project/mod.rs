@@ -64,6 +64,7 @@ pub struct Project {
     #[serde(skip)]
     terminal_buffer: String,
     persistant_buffer: String,
+    output_buffer: String,
     #[serde(skip)]
     receiver: Option<std::sync::mpsc::Receiver<String>>,
     current_view: ProjectViewType,
@@ -86,7 +87,7 @@ impl Project {
     fn info_logger(&mut self, msg: &str) {
         info!("{}", msg);
         let msg = msg.to_owned() + "\n";
-        self.terminal_buffer += &msg;
+        self.output_buffer += &msg;
     }
 
     pub fn borrow_name(&mut self) -> &mut String {

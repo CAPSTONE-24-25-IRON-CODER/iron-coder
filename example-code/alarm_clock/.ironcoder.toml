@@ -1,6 +1,14 @@
 name = "AlarmClock"
 location = "example-code/alarm_clock"
+persistant_buffer = """
+Windows PowerShell\r
+Copyright (C) Microsoft Corporation. All rights reserved.\r
+\r
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows\r
+\r
+PS C:\\Users\\ethan\\Documents\\CEN3907\\iron-coder> """
 current_view = "BoardsView"
+spawn_child = true
 
 [system]
 peripheral_boards = []
