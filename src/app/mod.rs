@@ -189,6 +189,7 @@ impl IronCoderApp {
         }
 
         app.project.spawn_child = false;
+        app.project.update_directory = true;
 
         return app;
     }
