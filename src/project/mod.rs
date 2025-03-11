@@ -65,6 +65,8 @@ pub struct Project {
     terminal_buffer: String,
     persistant_buffer: String,
     output_buffer: String,
+    pub update_directory: bool,
+    directory: String,
     #[serde(skip)]
     receiver: Option<std::sync::mpsc::Receiver<String>>,
     current_view: ProjectViewType,

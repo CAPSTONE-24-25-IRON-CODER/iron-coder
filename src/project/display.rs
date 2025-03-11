@@ -89,39 +89,28 @@ impl Project {
             fs::File::create("out.txt");
         }
         self.spawn_child();
-        // write output from text file to persitant buffer
-        let mut output = fs::read("out.txt").unwrap(); 
+        // write output from text file to persitant buffer 
         let mut lines = Vec::<String>::new();
         lines = read_to_string("out.txt")
         .unwrap()
         .lines()
         .map(String::from)
         .collect();
-        let mut s = lines.last();
-        if(!lines.is_empty())
+        if((self.update_directory && !lines.is_empty()) || (!lines.is_empty() && self.directory.is_empty()))
         {
-            if(!s.unwrap().contains(">"))
-            {
-                // read again (prevents input line from getting messed up?)
-                lines = read_to_string("out.txt")
-                .unwrap()
-                .lines()
-                .map(String::from)
-                .collect();
-    
-                s = lines.last();
-            }
-
-            if(self.terminal_buffer.is_empty())
-            {
-                self.terminal_buffer = String::from(s.unwrap());
-            }
+            self.directory = lines.last().unwrap().to_string();
+            self.terminal_buffer = self.directory.to_string().clone(); 
+            self.update_directory = false;  
         }
+        if(self.terminal_buffer.is_empty())
+        {
+            self.terminal_buffer = self.directory.clone();
+        }        
         if(!self.terminal_buffer.is_empty())
         {
-            if(self.terminal_buffer.len() < String::from(s.unwrap()).len())
+            if(self.terminal_buffer.len() < self.directory.len())
             {
-                self.terminal_buffer = String::from(s.unwrap());
+                self.terminal_buffer = self.directory.clone();
             }
         }
         if(!lines.is_empty())
@@ -135,6 +124,20 @@ impl Project {
                 self.output_buffer += s.as_str();
             }
         }
+        egui::CollapsingHeader::new("Output").show(ui, |ui| {
+            egui::ScrollArea::both()
+            .auto_shrink([false; 2])
+            .stick_to_bottom(true)
+            .show(ui, |ui|
+            {
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.output_buffer)
+                    .interactive(false)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+            })
+        });
         egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
             egui::ScrollArea::both()
             .auto_shrink([false; 2])
@@ -161,24 +164,13 @@ impl Project {
 
                     // write command from terminal buffer to child process
                     let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
+                    if(self.terminal_buffer[index_num..].contains("cd"))
+                    {
+                        self.update_directory = true;
+                    }
                     self.terminal_buffer.clear();
                 }
             });
-        });
-
-        egui::CollapsingHeader::new("Output").show(ui, |ui| {
-            egui::ScrollArea::both()
-            .auto_shrink([false; 2])
-            .stick_to_bottom(true)
-            .show(ui, |ui|
-            {
-                ui.add(
-                    egui::TextEdit::multiline(&mut self.output_buffer)
-                    .interactive(false)
-                    .frame(false)
-                    .desired_width(f32::INFINITY)
-                );
-            })
         });
     }
     // spawns terminal application if no terminal has spawned yet
@@ -208,6 +200,7 @@ impl Project {
         .spawn()
         .expect("Error"));
         self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+        self.update_directory = true;
     }
 
     /// show the project tree in a Ui
@@ -290,7 +283,6 @@ impl Project {
                 " clear terminal",
             ).frame(false);
             if ui.add(button).clicked() {
-                self.terminal_buffer.clear();
                 self.persistant_buffer.clear();
                 self.restart_terminal();
                 self.output_buffer.clear();

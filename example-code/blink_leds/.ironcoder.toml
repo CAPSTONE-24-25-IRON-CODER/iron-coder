@@ -1,6 +1,14 @@
 name = "Blink_LED"
 location = "example-code/blink_leds"
+persistant_buffer = """
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+"""
+output_buffer = ""
 current_view = "FileTree"
+spawn_child = true
 
 [system]
 peripheral_boards = []
