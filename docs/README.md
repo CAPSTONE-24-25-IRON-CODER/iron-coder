@@ -90,6 +90,11 @@ SVG parser only support PNG image types
       - Add supporting error messages for the user when the ImageNotPNG error is thrown
         - “SVG Image must be derived from a PNG”
     - Add Unit Tests for generating TOML File and SVG File
+  - Renode Simulator
+    - Added better integration of Renode within Iron Coder with the ability to launch a predetermined script for testing
+    - Added the option to open and close Renode
+    - Added separate threads to read Renode output
+    - Added another thread for state saving every 5 minutes
 
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
@@ -100,7 +105,6 @@ parameters that are needed to describe the boards and work within the hardware e
   - Window stays open after loading example, need research into egui to figure out how to close after clicking example
   - Sometimes drawn wire connections will appear on top of the add board menu and other windows
   - More than one discrete component cannot be added to the hardware editor
-  - Rx pin in STM32 board example does not work properly so we can only output data
   - Tree command in windows OS causes crash, possibly due to string variable not being able to hold data from shell output
   - When an SVG image element is very large, it will take up the entire designate pins window and some of the window elements are not accessible (instructions and cancel button)
-
+  - Renode does not automatically compile code done within the window so will require user to compile before starting the script 
