@@ -833,7 +833,7 @@ impl Project {
             .collapsible(false)
             .resizable(false)
             .movable(false)
-            .vscroll(true)
+            .fixed_size(max_rect.size())
             .max_height(max_rect.height())
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
@@ -857,6 +857,7 @@ impl Project {
                     data.get_temp_mut_or(pins_required_id, false).clone()
                 });
                 let mut b = Board::default();
+                let mut instruction_in_red = false;
 
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
@@ -870,17 +871,16 @@ impl Project {
                             // Display designate pins
                             cols_ui[0].horizontal(|ui_h| {
                                 ui_h.label(RichText::new("Add Pin:").underline());
-                                ui_h.label(" Left-Click anywhere on image");
+                                ui_h.label(" Left-Click anywhere on image. You must select a name first.");
                             });
                             cols_ui[0].horizontal(|ui_h| {
                                 ui_h.label(RichText::new("Delete Pin:").underline());
                                 ui_h.label(" Right-Click existing pin");
                             });
                             cols_ui[0].horizontal(|ui_h| {
-                                ui_h.label(RichText::new("Apply a New Name to Pin:").underline());
+                                ui_h.label(RichText::new("Change a Pin's Name:").underline());
                                 ui_h.label(" Select a Name and Double-Click existing pin");
                             });
-
 
                             // Display image
                             b.svg_board_info = Some(svg_board_info);
@@ -925,15 +925,26 @@ impl Project {
                                     if !hovering_over_pin {
                                         cols_ui[0].painter().circle_filled(cursor_origin, pin_radius, Color32::DARK_RED);
                                     }
+
+                                    // Highlight instruction
+                                    if pin_name_box.is_empty() {
+                                        instruction_in_red = true;
+                                        cols_ui[0].label(RichText::new("You must add pin names in the pinout form and select a name from the dropdown before adding pins to your component.").color(Color32::RED));
+                                    }
+
                                     // Add pin if left click
                                     if let response = cols_ui[0].interact(cols_ui[0].clip_rect(), cols_ui[0].id(), egui::Sense::click()) {
-                                        if !hovering_over_pin && response.clicked() {
+                                        if !hovering_over_pin && response.clicked() && !pin_name_box.is_empty() {
                                             let pin_rect = Rect::from_center_size(cursor_origin, Vec2::new(pin_radius * 2.0, pin_radius * 2.0));
                                             pin_rects.push(pin_rect);
-                                            pin_names.push(format!("pin{}", pin_rects.len()))
+                                            pin_names.push(pin_name_box.clone())
                                         }
                                     }
                                 }
+                            }
+
+                            if !instruction_in_red {
+                                cols_ui[0].label(RichText::new("You must add pin names in the pinout form and select a name from the dropdown before adding pins to your component."));
                             }
 
                             ctx.data_mut(|data| {
@@ -960,17 +971,19 @@ impl Project {
 
                             cols_ui[0].horizontal(|ui| {
                                 ui.label("Pin Name List:");
-                                egui::ComboBox::from_label("Select pin name then double-click pin to apply!")
+                                egui::ComboBox::from_label("Select pin name for new or existing pins!")
                                     .selected_text(format!("{:?}", pin_name_box))
                                     .show_ui(ui, |ui| {
-                                        if pin_names_dropdown.len() == 0 || ( pin_names_dropdown.len() == 1 && pin_names_dropdown[0].is_empty() ) {
-                                            let mut unused= "Add pins to pin information form!";
-                                            ui.selectable_value(&mut unused,"Add pins to pin information form!", "Cannot select name. Add pin names in the pin information form!");
-                                        }
-                                        for pin in pin_names_dropdown{
+                                        let mut pin_name_found = false;
+                                        for pin in pin_names_dropdown.clone(){
                                             if !pin.is_empty(){
+                                                pin_name_found = true;
                                                 ui.selectable_value(&mut pin_name_box, pin.clone(), pin.clone());
                                             }
+                                        }
+                                        if pin_names_dropdown.len() == 0 || !pin_name_found {
+                                            pin_name_box = "".to_string();
+                                            ui.selectable_value(&mut pin_name_box, "".to_string(), "Cannot select name. Add pin names in the pin information form!");
                                         }
                                     }
                                     );
@@ -1013,16 +1026,21 @@ impl Project {
                                         });
                                     }
                                 }
+                                if pins_required {
+                                    ui.label(RichText::new("Resolve all errors.").color(Color32::RED));
+                                }
                             });
 
-                            if pins_required {
-                                cols_ui[0].label(RichText::new("Resolve all errors.\nNote: Must designate at least one pin. Add pin name to form and click image to designate pin location.").color(Color32::RED));
-                            }
-
                             // Display pinout form
-
-                            cols_ui[1 % num_cols].add(egui::Label::new(RichText::new("Add Pinout Information").underline()));
-                            BoardTomlInfo::update_pinout_form_UI(&mut board_toml_info, ctx, &mut cols_ui[1 % num_cols]);
+                            egui::containers::scroll_area::ScrollArea::vertical()
+                                .max_height(max_rect.shrink(80.0).height())
+                                .show(&mut cols_ui[1 % num_cols], |ui| {
+                                    if pins_required {
+                                        ui.label(RichText::new("Resolve all errors.\nNote: Must designate at least one pin. Add pin name to form and click image to designate pin location.").color(Color32::RED));
+                                    }
+                                    ui.add(egui::Label::new(RichText::new("Add Pinout Information").underline()));
+                                    BoardTomlInfo::update_pinout_form_UI(&mut board_toml_info, ctx, ui);
+                            });
 
                             ctx.data_mut(|data| {
                                 data.insert_temp(board_toml_info_id, board_toml_info);
