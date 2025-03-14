@@ -640,9 +640,9 @@ impl Project {
             if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
                 index = width_start + 7;
             } else {
-                let width_end = svg_string[width_start + 7..].find("\"").unwrap();
+                let width_end = svg_string[width_start + 7..].find(|c: char| !c.is_ascii_digit() && c != '.').unwrap();
                 let width_value = &svg_string[width_start + 7..width_start + 7 + width_end];
-                width = width_value.parse().unwrap();
+                width = width_value.parse().unwrap_or_else(|parse_float_error| 100.0);
                 break;
             }
         }
@@ -655,9 +655,9 @@ impl Project {
             if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
                 index = height_start + 8;
             } else {
-                let height_end = svg_string[height_start + 8..].find("\"").unwrap();
+                let height_end = svg_string[height_start + 8..].find(|c: char| !c.is_ascii_digit() && c != '.').unwrap();
                 let height_value = &svg_string[height_start + 8..height_start + 8 + height_end];
-                height = height_value.parse().unwrap();
+                height = height_value.parse().unwrap_or_else(|parse_float_error| 100.0);
                 break;
             }
         }
@@ -677,7 +677,7 @@ impl Project {
                 if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
                     index = width_start + 7;
                 } else {
-                    let width_end = svg_string[width_start + 7..].find("\"").unwrap();
+                    let width_end = svg_string[width_start + 7..].find(|c: char| !c.is_ascii_digit() && c != '.').unwrap();
                     svg_string.replace_range(width_start + 7..width_start + 7 + width_end, width.to_string().as_str());
                     index = width_start + 7;
                 }
@@ -691,7 +691,7 @@ impl Project {
                 if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
                     index = height_start + 8;
                 } else {
-                    let height_end = svg_string[height_start + 8..].find("\"").unwrap();
+                    let height_end = svg_string[height_start + 8..].find(|c: char| !c.is_ascii_digit() && c != '.').unwrap();
                     svg_string.replace_range(height_start + 8..height_start + 8 + height_end, height.to_string().as_str());
                     index = height_start + 8;
                 }

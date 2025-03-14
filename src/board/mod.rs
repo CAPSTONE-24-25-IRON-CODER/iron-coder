@@ -422,7 +422,7 @@ impl BoardTomlInfo {
 
     pub fn update_general_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label("Board Name:");
+            ui.label("Component Name:");
             egui::TextEdit::singleline(&mut self.name)
                 .hint_text("Enter here").show(ui);
         });
