@@ -487,7 +487,7 @@ impl Project {
                                 data.insert_temp(standard_required_id, false);
                             });
                         }
-                        if board_toml_info.cpu.is_empty() && board_toml_info.board_type != BoardType::Discrete {
+                        if board_toml_info.cpu.is_empty() && board_toml_info.board_type == BoardType::Main {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(cpu_required_id, true);
@@ -497,7 +497,7 @@ impl Project {
                                 data.insert_temp(cpu_required_id, false);
                             });
                         }
-                        if board_toml_info.flash == 0 && board_toml_info.board_type != BoardType::Discrete {
+                        if board_toml_info.flash == 0 && board_toml_info.board_type == BoardType::Main {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(flash_required_id, true);
@@ -507,7 +507,7 @@ impl Project {
                                 data.insert_temp(flash_required_id, false);
                             });
                         }
-                        if board_toml_info.ram == 0 && board_toml_info.board_type != BoardType::Discrete{
+                        if board_toml_info.ram == 0 && board_toml_info.board_type == BoardType::Main {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(ram_required_id, true);

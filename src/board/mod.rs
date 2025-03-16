@@ -14,6 +14,7 @@ use egui::{Button, Color32, TextBuffer, Vec2};
 use serde::{Serialize, Deserialize};
 
 use ra_ap_ide;
+use tracing_subscriber::fmt::writer::EitherWriter::B;
 
 pub mod svg_reader;
 use svg_reader::SvgBoardInfo;
@@ -31,25 +32,26 @@ use crate::board::pinout::{InterfaceDirection, InterfaceType};
 
 /// These are the various standard development board form factors
 #[non_exhaustive]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub enum BoardStandards {
+    #[default]
+    None,
     Feather,
     Arduino,
     RaspberryPi,
     ThingPlus,
     MicroMod,
-    Components,
 }
 
 impl fmt::Display for BoardStandards {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            BoardStandards::None => write!(f, "None"),
             BoardStandards::Feather => write!(f, "Feather"),
             BoardStandards::Arduino => write!(f, "Arduino"),
             BoardStandards::RaspberryPi => write!(f, "RaspberryPi"),
             BoardStandards::ThingPlus => write!(f, "ThingPlus"),
             BoardStandards::MicroMod => write!(f, "MicroMod"),
-            BoardStandards::Components => write!(f, "Components")
             // _ => write!(f, "Unknown Dev Board Standard"),
         }
     }
@@ -457,13 +459,11 @@ impl BoardTomlInfo {
 
         ui.horizontal(|ui| {
             ui.label("Standard:");
-            if self.board_type == BoardType::Discrete {
-                self.standard = BoardStandards::Components.to_string();
-                ui.selectable_value(&mut self.standard, BoardStandards::Components.to_string(), "Components");
+            if self.board_type == BoardType::Discrete || self.board_type == BoardType::Peripheral{
+                self.standard = BoardStandards::None.to_string();
+                ui.selectable_value(&mut self.standard, BoardStandards::None.to_string(), "None");
             } else {
-                if self.standard.eq("Components") {
-                    self.standard.clear();
-                }
+                ui.selectable_value(&mut self.standard, BoardStandards::None.to_string(), "None");
                 ui.selectable_value(&mut self.standard, BoardStandards::Arduino.to_string(), "Arduino");
                 ui.selectable_value(&mut self.standard, BoardStandards::RaspberryPi.to_string(), "RaspberryPi");
                 ui.selectable_value(&mut self.standard, BoardStandards::Feather.to_string(), "Feather");
@@ -474,7 +474,7 @@ impl BoardTomlInfo {
 
         self.display_required_message(ctx, ui, "standard_required");
 
-        if self.board_type != BoardType::Discrete {
+        if self.board_type == BoardType::Main {
             ui.horizontal(|ui| {
                 ui.label("CPU:");
                 egui::TextEdit::singleline(&mut self.cpu)
