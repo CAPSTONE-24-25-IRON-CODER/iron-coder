@@ -366,7 +366,7 @@ impl IronCoderApp {
         if should_show_generate_board_window || should_show_new_board_window || should_show_confirmation {
             egui::CentralPanel::default().show(ctx, |ui| {
                 if should_show_generate_board_window && !should_show_new_board_window {
-                    self.project.display_generate_new_board(ctx, &mut should_show_generate_board_window);
+                    self.project.display_generate_board_image_prompt(ctx, &mut should_show_generate_board_window);
                 }
                 ctx.data_mut(|data| {
                     data.insert_temp(generate_boards_id, should_show_generate_board_window);
@@ -381,7 +381,7 @@ impl IronCoderApp {
                     ctx.data_mut(|data| {
                         data.insert_temp(generate_boards_id, false);
                     });
-                    self.project.display_new_board_png(ctx, &mut should_show_new_board_window);
+                    self.project.display_generate_new_board_form(ctx, &mut should_show_new_board_window);
                 }
                 ctx.data_mut(|data| {
                     data.insert_temp(new_board_image_id, should_show_new_board_window);

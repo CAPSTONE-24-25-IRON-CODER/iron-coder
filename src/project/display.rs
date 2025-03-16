@@ -395,186 +395,53 @@ impl Project {
 
     }
 
-    pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
-        let board_toml_info_id = egui::Id::new("board_toml_info");
+    pub fn display_generate_board_image_prompt(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+        let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
+        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
         let screen_rect = ctx.input(|i: &egui::InputState| i.screen_rect());
-        let min_rect = screen_rect.shrink2(Vec2::new(100.0, 60.0));
         let max_rect = screen_rect.shrink(50.0);
-        let response = egui::Window::new("Generate TOML File")
+        let response = egui::Window::new("Start Generating New Component")
             .open(should_show)
             .collapsible(false)
             .resizable(false)
             .movable(false)
             .vscroll(true)
-            .min_size(min_rect.size())
             .max_size(max_rect.size())
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                ui.label("Fill out all fields. Press X to cancel");
+                ui.label("Pick an Image for the New Component!");
+                if ui.button("Use Default Image").clicked(){
+                    ctx.data_mut(|data| {
+                        data.insert_temp(new_board_svg_path_id, PathBuf::from("./iron-coder-boards/default_board.svg"));
+                    });
 
-                let mut board_toml_info = ctx.data_mut(|data| {
-                    data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
-                });
+                    ctx.data_mut(|data| {
+                        data.insert_temp(should_show_new_board_image_id, true);
+                    });
+                }
+                if ui.button("Select my Own Image from Filesystem").clicked(){
+                    if let Some(svg_file_path) = FileDialog::new()
+                        .set_title("Select Image File for Board (File Type Must be SVG)")
+                        .add_filter("SVG Filter", &["svg"])
+                        .pick_file()
+                    {
+                        // Check if SVG needs to be resized
+                        self.change_svg_size(svg_file_path.clone());
 
-                BoardTomlInfo::update_general_form_UI(&mut board_toml_info, ctx, ui);
+                        ctx.data_mut(|data| {
+                            data.insert_temp(new_board_svg_path_id, svg_file_path);
+                        });
 
-                ctx.data_mut(|data| {
-                    data.insert_temp(board_toml_info_id, board_toml_info);
-                });
-
-                board_toml_info = ctx.data_mut(|data| {
-                    data.get_temp_mut_or(board_toml_info_id, BoardTomlInfo::default()).clone()
-                });
-
-                ui.horizontal(|ui| {
-                    if ui.button("Next - Select Board Image").clicked() {
-                        // Input validation before move to next screen
-                        let mut invalid_field_flag : bool = false;
-                        let mut duplicate_name_flag : bool = false;
-                        let name_required_id = egui::Id::new("name_required");
-                        let name_duplicated_id = egui::Id::new("name_duplicated");
-                        let manufacture_required_id = egui::Id::new("manufacturer_required");
-                        let standard_required_id = egui::Id::new("standard_required");
-                        let cpu_required_id = egui::Id::new("cpu_required");
-                        let flash_required_id = egui::Id::new("flash_required");
-                        let ram_required_id = egui::Id::new("ram_required");
-                        let req_crates_required_id = egui::Id::new("req_crates_required");
-                        let rel_crates_required_id = egui::Id::new("rel_crates_required");
-
-                        for board in self.known_boards.iter() {
-                            if board.get_name().to_lowercase().replace(" ", "").trim().eq(board_toml_info.name.to_lowercase().replace(" ", "").trim()){
-                                invalid_field_flag = true;
-                                duplicate_name_flag = true;
-                                ctx.data_mut(|data| {
-                                    data.insert_temp(name_duplicated_id, true);
-                                });
-                            }
-                        }
-
-                        if !duplicate_name_flag {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(name_duplicated_id, false);
-                            });
-                        }
-
-                        if board_toml_info.name.is_empty() {
-                            invalid_field_flag = true;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(name_required_id, true);
-                            });
-                        } else {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(name_required_id, false);
-                            });
-                        }
-                        if board_toml_info.manufacturer.is_empty() {
-                            invalid_field_flag = true;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(manufacture_required_id, true);
-                            });
-                        } else {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(manufacture_required_id, false);
-                            });
-                        }
-                        if board_toml_info.standard.is_empty() {
-                            invalid_field_flag = true;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(standard_required_id, true);
-                            });
-                        } else {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(standard_required_id, false);
-                            });
-                        }
-                        if board_toml_info.cpu.is_empty() && board_toml_info.board_type == BoardType::Main {
-                            invalid_field_flag = true;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(cpu_required_id, true);
-                            });
-                        } else {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(cpu_required_id, false);
-                            });
-                        }
-                        if board_toml_info.flash == 0 && board_toml_info.board_type == BoardType::Main {
-                            invalid_field_flag = true;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(flash_required_id, true);
-                            });
-                        } else {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(flash_required_id, false);
-                            });
-                        }
-                        if board_toml_info.ram == 0 && board_toml_info.board_type == BoardType::Main {
-                            invalid_field_flag = true;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(ram_required_id, true);
-                            });
-                        } else {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(ram_required_id, false);
-                            });
-                        }
-                        if board_toml_info.required_crates.contains(&String::new()) {
-                            invalid_field_flag = true;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(req_crates_required_id, true);
-                            });
-                        } else {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(req_crates_required_id, false);
-                            });
-                        }
-                        if board_toml_info.related_crates.contains(&String::new()) {
-                            invalid_field_flag = true;
-                            ctx.data_mut(|data| {
-                                data.insert_temp(rel_crates_required_id, true);
-                            });
-                        } else {
-                            ctx.data_mut(|data| {
-                                data.insert_temp(rel_crates_required_id, false);
-                            });
-                        }
-
-                        if !invalid_field_flag {
-                            self.clear_required_flag_messages(ctx);
-                            if let Some(svg_file_path) = FileDialog::new()
-                                .set_title("Select Image File for Board (File Type Must be SVG)")
-                                .add_filter("SVG Filter", &["svg"])
-                                .pick_file()
-                            {
-                                let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
-                                let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
-
-                                // Check if SVG needs to be resized
-                                self.change_svg_size(svg_file_path.clone());
-
-                                ctx.data_mut(|data| {
-                                    data.insert_temp(new_board_svg_path_id, svg_file_path);
-                                });
-
-                                ctx.data_mut(|data| {
-                                    data.insert_temp(should_show_new_board_image_id, true);
-                                });
-                            }
-                        }
-
+                        ctx.data_mut(|data| {
+                            data.insert_temp(should_show_new_board_image_id, true);
+                        });
                     }
-                });
+                }
         });
 
         if response.is_some() {
             // unwrap ok here because we check that response is Some.
             ctx.move_to_top(response.unwrap().response.layer_id);
-        }
-
-        if !*should_show {
-            self.clear_required_flag_messages(ctx);
-            ctx.data_mut(|data| {
-                data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
-            });
         }
     }
 
@@ -816,7 +683,7 @@ impl Project {
 
     }
 
-    pub fn display_new_board_png(&mut self, ctx: &egui::Context, should_show: &mut bool) {
+    pub fn display_generate_new_board_form(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
         let pin_rects_id = egui::Id::new("new_board_pin_rects");
         let pin_names_id = egui::Id::new("pin_names_id");
@@ -859,16 +726,19 @@ impl Project {
                 let mut b = Board::default();
                 let mut instruction_in_red = false;
 
+                // Read SVG File
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
                     Ok(svg_board_info) => {
+                        // Determine number of columns to display (1 or 2)
                         let available_width = max_rect.width();
                         let mut num_cols = 2;
                         if available_width < 640.0 * 2.0 {
                             num_cols = 1;
                         }
                         ui.columns(num_cols, |cols_ui| {
-                            // Display designate pins
+                            // Display designate pins GUI - SVG image and designating pins
+                            // instructions and controls
                             cols_ui[0].horizontal(|ui_h| {
                                 ui_h.label(RichText::new("Add Pin:").underline());
                                 ui_h.label(" Left-Click anywhere on image. You must select a name first.");
@@ -985,8 +855,7 @@ impl Project {
                                             pin_name_box = "".to_string();
                                             ui.selectable_value(&mut pin_name_box, "".to_string(), "Cannot select name. Add pin names in the pin information form!");
                                         }
-                                    }
-                                    );
+                                    });
                             });
 
                             cols_ui[0].horizontal(|ui| {
@@ -1012,11 +881,123 @@ impl Project {
                                 });
                                 let pin_names_form = board_toml_info.get_all_pin_names();
                                 if ui.button("Done - Generate Board").clicked() {
+                                    // Input validation before move to next screen
+                                    let mut invalid_field_flag : bool = false;
+                                    let mut duplicate_name_flag : bool = false;
+                                    let name_required_id = egui::Id::new("name_required");
+                                    let name_duplicated_id = egui::Id::new("name_duplicated");
+                                    let manufacture_required_id = egui::Id::new("manufacturer_required");
+                                    let standard_required_id = egui::Id::new("standard_required");
+                                    let cpu_required_id = egui::Id::new("cpu_required");
+                                    let flash_required_id = egui::Id::new("flash_required");
+                                    let ram_required_id = egui::Id::new("ram_required");
+                                    let req_crates_required_id = egui::Id::new("req_crates_required");
+                                    let rel_crates_required_id = egui::Id::new("rel_crates_required");
+
+                                    for board in self.known_boards.iter() {
+                                        if board.get_name().to_lowercase().replace(" ", "").trim().eq(board_toml_info.name.to_lowercase().replace(" ", "").trim()){
+                                            invalid_field_flag = true;
+                                            duplicate_name_flag = true;
+                                            ctx.data_mut(|data| {
+                                                data.insert_temp(name_duplicated_id, true);
+                                            });
+                                        }
+                                    }
+
+                                    if !duplicate_name_flag {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(name_duplicated_id, false);
+                                        });
+                                    }
+
+                                    if board_toml_info.name.is_empty() {
+                                        invalid_field_flag = true;
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(name_required_id, true);
+                                        });
+                                    } else {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(name_required_id, false);
+                                        });
+                                    }
+                                    if board_toml_info.manufacturer.is_empty() {
+                                        invalid_field_flag = true;
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(manufacture_required_id, true);
+                                        });
+                                    } else {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(manufacture_required_id, false);
+                                        });
+                                    }
+                                    if board_toml_info.standard.is_empty() {
+                                        invalid_field_flag = true;
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(standard_required_id, true);
+                                        });
+                                    } else {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(standard_required_id, false);
+                                        });
+                                    }
+                                    if board_toml_info.cpu.is_empty() && board_toml_info.board_type == BoardType::Main {
+                                        invalid_field_flag = true;
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(cpu_required_id, true);
+                                        });
+                                    } else {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(cpu_required_id, false);
+                                        });
+                                    }
+                                    if board_toml_info.flash == 0 && board_toml_info.board_type == BoardType::Main {
+                                        invalid_field_flag = true;
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(flash_required_id, true);
+                                        });
+                                    } else {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(flash_required_id, false);
+                                        });
+                                    }
+                                    if board_toml_info.ram == 0 && board_toml_info.board_type == BoardType::Main {
+                                        invalid_field_flag = true;
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(ram_required_id, true);
+                                        });
+                                    } else {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(ram_required_id, false);
+                                        });
+                                    }
+                                    if board_toml_info.required_crates.contains(&String::new()) {
+                                        invalid_field_flag = true;
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(req_crates_required_id, true);
+                                        });
+                                    } else {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(req_crates_required_id, false);
+                                        });
+                                    }
+                                    if board_toml_info.related_crates.contains(&String::new()) {
+                                        invalid_field_flag = true;
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(rel_crates_required_id, true);
+                                        });
+                                    } else {
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(rel_crates_required_id, false);
+                                        });
+                                    }
                                     if pin_names_form.len() == 0 || ( pin_names_form.len() == 1 && pin_names_form[0].is_empty() ) || pin_rects.is_empty() || pin_names_form.contains(&String::new()) {
+                                        invalid_field_flag = true;
                                         ctx.data_mut(|data| {
                                             data.insert_temp(pins_required_id, true);
                                         });
-                                    } else {
+                                    }
+
+                                    if !invalid_field_flag {
                                         self.save_new_board_info(ctx);
                                         done = true;
 
@@ -1030,6 +1011,7 @@ impl Project {
                                         });
                                     }
                                 }
+
                                 if pins_required {
                                     ui.label(RichText::new("Resolve all errors.").color(Color32::RED));
                                 }
@@ -1042,7 +1024,10 @@ impl Project {
                                     if pins_required {
                                         ui.label(RichText::new("Resolve all errors.\nNote: Must designate at least one pin. Add pin name to form and click image to designate pin location.").color(Color32::RED));
                                     }
-                                    ui.add(egui::Label::new(RichText::new("Add Pinout Information").underline()));
+                                    ui.label(RichText::new("Fill Out All Fields"));
+                                    ui.label(RichText::new("General Component Information").underline());
+                                    BoardTomlInfo::update_general_form_UI(&mut board_toml_info, ctx, ui);
+                                    ui.label(RichText::new("Add Pinout Information").underline());
                                     BoardTomlInfo::update_pinout_form_UI(&mut board_toml_info, ctx, ui);
                             });
 
@@ -1057,6 +1042,12 @@ impl Project {
                         ui.label(format!("Error with SVG parsing. {e:?} error thrown."));
                         if format!("{e:?}").eq("ImageNotPNG"){
                             ui.label("SVG must be derived from PNG Image");
+                        }
+
+                        if ui.button("Use Default Image").clicked() {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(new_board_svg_path_id, PathBuf::from("./iron-coder-boards/default_board.svg"));
+                            });
                         }
 
                         if ui.button("Pick a different file").clicked() {
@@ -1088,7 +1079,7 @@ impl Project {
         }
 
         if !*should_show {
-            let board_toml_info_id = egui::Id::new("board_toml_info");
+            self.clear_required_flag_messages(ctx);
             ctx.data_mut(|data| {
                 data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
             });
