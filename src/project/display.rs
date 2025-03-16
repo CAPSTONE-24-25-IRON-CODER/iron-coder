@@ -1021,8 +1021,12 @@ impl Project {
                                         done = true;
 
                                         let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+                                        let reload_boards_id = egui::Id::new("reload_boards_from_filesystem");
                                         ctx.data_mut(|data| {
                                             data.insert_temp(new_board_confirmation_screen_id, true);
+                                        });
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(reload_boards_id, true);
                                         });
                                     }
                                 }
@@ -1116,7 +1120,7 @@ impl Project {
             .movable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                ui.label("You MUST restart the application to use the new board or component.");
+                ui.label("Close this window to return to the project editor and board selection window.");
             });
 
         if response.is_some() {
