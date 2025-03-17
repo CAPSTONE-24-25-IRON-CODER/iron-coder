@@ -35,6 +35,7 @@ prettyplease = "0.2.10"
 slotmap = "1.0.6"
 clap = { version = "4.3.19", features = ["derive"] }
 usvg = "0.35.0"
+base64 = "0.22.1"
 generate = "1.5.0"
 savefile-derive = "0.17.4"
 k_board = "1.2.2"

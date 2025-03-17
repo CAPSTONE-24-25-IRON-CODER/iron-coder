@@ -351,6 +351,7 @@ impl IronCoderApp {
         let new_board_image_id = egui::Id::new("should_show_new_board_image");
         let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
         let reload_boards_id = egui::Id::new("reload_boards_from_filesystem");
+        let save_failure_id = egui::Id::new("save_board_FAILED");
 
         // Show the generate boards window, if needed
         let mut should_show_generate_board_window = ctx.data_mut(|data| {
@@ -391,6 +392,9 @@ impl IronCoderApp {
                 let mut should_show_confirmation = ctx.data_mut(|data| {
                     data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
                 });
+                let mut save_failed = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(save_failure_id, false).clone()
+                });
                 let mut reload_boards = ctx.data_mut(|data| {
                     data.get_temp_mut_or(reload_boards_id, false).clone()
                 });
@@ -403,12 +407,17 @@ impl IronCoderApp {
                     });
                 }
 
-                if should_show_confirmation {
+                if should_show_confirmation && !save_failed{
                     self.project.display_new_board_confirmation(ctx, &mut should_show_confirmation);
+                } else if save_failed {
+                    self.project.display_new_board_failure(ctx, &mut save_failed);
                 }
 
                 ctx.data_mut(|data| {
                     data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
+                });
+                ctx.data_mut(|data| {
+                    data.insert_temp(save_failure_id, save_failed);
                 });
             });
 
