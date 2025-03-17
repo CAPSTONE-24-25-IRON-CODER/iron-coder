@@ -21,7 +21,7 @@ use std::vec::Vec;
 use std::borrow::Borrow;
 
 use image;
-use base64::{Engine as _, engine::{self, general_purpose}, alphabet};
+use base64::{Engine as _, engine::general_purpose};
 use egui::{
     ColorImage,
     Pos2,
