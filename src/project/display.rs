@@ -402,6 +402,8 @@ impl Project {
         let error_string_id = egui::Id::new("select_image_error_string");
         let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
         let new_board_svg_string_id = egui::Id::new("new_board_svg_string");
+        let generating_svg_id = egui::Id::new("generating_svg_from_png");
+        let png_file_path_id = egui::Id::new("new_board_png_file_path_id");
         let screen_rect = ctx.input(|i: &egui::InputState| i.screen_rect());
         let min_rect = screen_rect.shrink2(Vec2::new(100.0, 60.0));
         let max_rect = screen_rect.shrink(50.0);
@@ -428,6 +430,9 @@ impl Project {
                 });
                 let error_string : String = ctx.data_mut(|data| {
                     data.get_temp_mut_or(error_string_id, "".to_string()).clone()
+                });
+                let generating_svg_from_png = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(generating_svg_id, false).clone()
                 });
 
                 BoardTomlInfo::update_general_form_UI(&mut board_toml_info, ctx, ui);
@@ -521,8 +526,8 @@ impl Project {
                     }
                 });
 
-                ui.horizontal(|ui| {
-                    if ui.button("Select PNG for Board Image (Files larger than 680 kB will Take Multiple Seconds to Load)").clicked() {
+                ui.vertical(|ui| {
+                    if ui.button("Select PNG for Board Image").clicked() {
                         if self.general_form_input_valid(ctx) {
                             self.clear_required_flag_messages(ctx);
                             if let Some(png_file_path) = FileDialog::new()
@@ -530,33 +535,14 @@ impl Project {
                                 .add_filter("PNG Filter", &["png"])
                                 .pick_file()
                             {
-                                match SvgBoardInfo::from_png(png_file_path.as_ref()) {
-                                    Ok(svg_string) => {
-                                        ctx.data_mut(|data| {
-                                            data.insert_temp(new_board_svg_string_id, svg_string);
-                                        });
-
-                                        ctx.data_mut(|data| {
-                                            data.insert_temp(should_show_new_board_image_id, true);
-                                        });
-
-                                        ctx.data_mut(|data| {
-                                            data.insert_temp(display_png_error_id, false);
-                                        });
-                                        ctx.data_mut(|data| {
-                                            data.insert_temp(display_svg_error_id, false);
-                                        });
-                                    }
-                                    Err(e) => {
-                                        ctx.data_mut(|data| {
-                                            data.insert_temp(display_png_error_id, true);
-                                        });
-                                        ctx.data_mut(|data| {
-                                            data.insert_temp(error_string_id, format!("{e:?}"));
-                                        });
-
-                                    }
-                                };
+                                ui.label("Generating SVG from PNG File...");
+                                ui.label("Files larger than 680 kB will take multiple seconds to load.");
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(generating_svg_id, true);
+                                });
+                                ctx.data_mut(|data| {
+                                    data.insert_temp(png_file_path_id, png_file_path);
+                                });
                             }
                         }
                     }
@@ -564,8 +550,43 @@ impl Project {
                     if png_svg_convert_error {
                         ui.label(format!("Error converting PNG to SVG: {}", error_string));
                     }
-
                 });
+
+                if generating_svg_from_png {
+                    ctx.data_mut(|data| {
+                        data.insert_temp(generating_svg_id, false);
+                    });
+                    let png_file_path = ctx.data_mut(|data| {
+                        data.get_temp_mut_or(png_file_path_id, PathBuf::default()).clone()
+                    });
+                    match SvgBoardInfo::from_png(png_file_path.as_ref()) {
+                        Ok(svg_string) => {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(new_board_svg_string_id, svg_string);
+                            });
+
+                            ctx.data_mut(|data| {
+                                data.insert_temp(should_show_new_board_image_id, true);
+                            });
+
+                            ctx.data_mut(|data| {
+                                data.insert_temp(display_png_error_id, false);
+                            });
+                            ctx.data_mut(|data| {
+                                data.insert_temp(display_svg_error_id, false);
+                            });
+                        }
+                        Err(e) => {
+                            ctx.data_mut(|data| {
+                                data.insert_temp(display_png_error_id, true);
+                            });
+                            ctx.data_mut(|data| {
+                                data.insert_temp(error_string_id, format!("{e:?}"));
+                            });
+
+                        }
+                    };
+                }
         });
 
         if response.is_some() {
@@ -577,6 +598,12 @@ impl Project {
             self.clear_required_flag_messages(ctx);
             ctx.data_mut(|data| {
                 data.insert_temp(board_toml_info_id, BoardTomlInfo::default().clone());
+            });
+            ctx.data_mut(|data| {
+                data.insert_temp(generating_svg_id, false);
+            });
+            ctx.data_mut(|data| {
+                data.insert_temp(png_file_path_id, PathBuf::default());
             });
         }
     }
