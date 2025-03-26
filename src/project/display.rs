@@ -798,8 +798,7 @@ impl Project {
             // Ignore if "inkscape:window-width="
             if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
                 index = width_start + 7;
-            } else {
-                let width_end = svg_string[width_start + 7..].find(|c: char| !c.is_ascii_digit() && c != '.').unwrap();
+            } else if let Some(width_end) = svg_string[width_start + 7..].find(|c: char| !c.is_ascii_digit() && c != '.') {
                 let width_value = &svg_string[width_start + 7..width_start + 7 + width_end];
                 width = width_value.parse().unwrap_or_else(|parse_float_error| 100.0);
                 break;
@@ -813,8 +812,7 @@ impl Project {
             // Ignore if "inkscape:window-height="
             if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
                 index = height_start + 8;
-            } else {
-                let height_end = svg_string[height_start + 8..].find(|c: char| !c.is_ascii_digit() && c != '.').unwrap();
+            } else if let Some(height_end) = svg_string[height_start + 8..].find(|c: char| !c.is_ascii_digit() && c != '.') {
                 let height_value = &svg_string[height_start + 8..height_start + 8 + height_end];
                 height = height_value.parse().unwrap_or_else(|parse_float_error| 100.0);
                 break;
@@ -835,8 +833,7 @@ impl Project {
                 // Ignore if "inkscape:window-width="
                 if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
                     index = width_start + 7;
-                } else {
-                    let width_end = svg_string[width_start + 7..].find(|c: char| !c.is_ascii_digit() && c != '.').unwrap();
+                } else if let Some(width_end) = svg_string[width_start + 7..].find(|c: char| !c.is_ascii_digit() && c != '.') {
                     svg_string.replace_range(width_start + 7..width_start + 7 + width_end, width.to_string().as_str());
                     index = width_start + 7;
                 }
@@ -849,8 +846,7 @@ impl Project {
                 // Ignore if "inkscape:window-width="
                 if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
                     index = height_start + 8;
-                } else {
-                    let height_end = svg_string[height_start + 8..].find(|c: char| !c.is_ascii_digit() && c != '.').unwrap();
+                } else if let Some(height_end) = svg_string[height_start + 8..].find(|c: char| !c.is_ascii_digit() && c != '.') {
                     svg_string.replace_range(height_start + 8..height_start + 8 + height_end, height.to_string().as_str());
                     index = height_start + 8;
                 }
@@ -861,8 +857,9 @@ impl Project {
             if let Some(viewbox_start) = svg_string.find("viewBox=\"0 0 ") {
                 let viewbox_start = index + viewbox_start;
 
-                let viewbox_end = svg_string[viewbox_start + 13..].find("\"").unwrap();
-                svg_string.replace_range(viewbox_start + 13..viewbox_start + 13 + viewbox_end, viewbox_string.as_str());
+                if let Some(viewbox_end) = svg_string[viewbox_start + 13..].find("\"") {
+                    svg_string.replace_range(viewbox_start + 13..viewbox_start + 13 + viewbox_end, viewbox_string.as_str());
+                }
             }
 
             ctx.data_mut(|data| {
