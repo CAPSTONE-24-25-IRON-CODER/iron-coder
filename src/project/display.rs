@@ -1131,7 +1131,7 @@ impl Project {
                         });
                         cols_ui[0].horizontal(|ui_h| {
                             ui_h.label(RichText::new("Change a Pin's Name:").underline());
-                            ui_h.label(" Select a Name and Double-Click existing pin");
+                            ui_h.label(" Select a Name and Left-Click existing pin");
                         });
 
                         // Display image
@@ -1164,7 +1164,7 @@ impl Project {
                                                 pin_rects.remove(i);
                                                 pin_names.remove(i);
                                             }
-                                            if response.double_clicked(){
+                                            if response.clicked(){
                                                 pin_names[i] = pin_name_box.clone();
                                             }
                                         }
