@@ -56,7 +56,7 @@ impl SvgBoardInfo {
         let mut img_bytes = Vec::new();
         let cursor = Cursor::new(&mut img_bytes);
         let writer = BufWriter::new(cursor);
-        let encoder = image::codecs::png::PngEncoder::new_with_quality(writer, CompressionType::Best, Adaptive);
+        let encoder = image::codecs::png::PngEncoder::new_with_quality(writer, CompressionType::Fast, Adaptive);
         match img.write_with_encoder(encoder){
             Ok(_) => {}
             Err(e) => {return Err(Error::ImageError(e))}
