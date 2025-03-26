@@ -6,27 +6,36 @@
 
 use egui::{Color32, Key, PointerButton, Pos2, Rect, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
+use fs_extra::file::read_to_string;
 use log::{info, warn};
+use core::f32;
 use std::collections::HashMap;
 use std::fs;
+use std::io::{Read, SeekFrom, Write};
+use std::os::windows::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
 use egui::widgets::Button;
 use git2::{Repository, StatusOptions};
+use std::fs::File;
 
 use crate::board;
 use crate::project::Project;
 use crate::app::icons::IconSet;
 use crate::app::{Mode, Warnings, Git};
+// use crate::serial_monitor::show_serial_monitor;
 
 use enum_iterator;
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
-use crate::board::{Board, BoardTomlInfo};
+use crate::board::{Board, BoardTomlInfo, BoardType};
 use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
+//use crate::serial_monitor::show;
+
+use std::process::{Command, Stdio, Child};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub enum ProjectViewType {
@@ -39,7 +48,6 @@ pub enum ProjectViewType {
 // this block contains the display related
 // methods for showing the Project in egui.
 impl Project {
-
     /// Recursively display the project directory.
     /// <dir> is the starting location, <level> is the recursion depth
     fn display_directory(&mut self, dir: &Path, level: usize, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -76,29 +84,123 @@ impl Project {
 
     /// show the terminal pane
     pub fn display_terminal(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        let send_string = "";
-
+        if(!Path::new("out.txt").exists())
+        {
+            fs::File::create("out.txt");
+        }
+        self.spawn_child();
+        // write output from text file to persitant buffer 
+        let mut lines = Vec::<String>::new();
+        lines = read_to_string("out.txt")
+        .unwrap()
+        .lines()
+        .map(String::from)
+        .collect();
+        if((self.update_directory && !lines.is_empty()) || (!lines.is_empty() && self.directory.is_empty()))
+        {
+            self.directory = lines.last().unwrap().to_string();
+            self.terminal_buffer = self.directory.to_string().clone(); 
+            self.update_directory = false;  
+        }
+        if(self.terminal_buffer.is_empty())
+        {
+            self.terminal_buffer = self.directory.clone();
+        }        
+        if(!self.terminal_buffer.is_empty())
+        {
+            if(self.terminal_buffer.len() < self.directory.len())
+            {
+                self.terminal_buffer = self.directory.clone();
+            }
+        }
+        if(!lines.is_empty())
+        {
+            lines.remove(lines.len() - 1);
+        }
+        self.persistant_buffer = lines.join("\n");
         // If there is an open channel, see if we can get some data from it
         if let Some(rx) = &self.receiver {
             while let Ok(s) = rx.try_recv() {
-                self.terminal_buffer += s.as_str();
+                self.output_buffer += s.as_str();
             }
         }
-
+        egui::CollapsingHeader::new("Output").show(ui, |ui| {
+            egui::ScrollArea::both()
+            .auto_shrink([false; 2])
+            .stick_to_bottom(true)
+            .show(ui, |ui|
+            {
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.output_buffer)
+                    .interactive(false)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+            })
+        });
         egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
             egui::ScrollArea::both()
             .auto_shrink([false; 2])
             .stick_to_bottom(true)
             .show(ui, |ui| {
                 ui.add(
+                    egui::TextEdit::multiline(&mut self.persistant_buffer)
+                    .interactive(false)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+                let response = ui.add(
                     egui::TextEdit::multiline(&mut self.terminal_buffer)
                     .code_editor()
-                    .interactive(false)
+                    .interactive(true)
                     .desired_width(f32::INFINITY)
                     .frame(false)
-                )
+                );
+                
+                if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                    // parse line at carrot to get command to send to shell
+                    let index = self.terminal_buffer.find('>');
+                    let index_num = index.unwrap_or(0) + 1;
+
+                    // write command from terminal buffer to child process
+                    let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
+                    if(self.terminal_buffer[index_num..].contains("cd"))
+                    {
+                        self.update_directory = true;
+                    }
+                    self.terminal_buffer.clear();
+                }
             });
         });
+    }
+    // spawns terminal application if no terminal has spawned yet
+    fn spawn_child(&mut self)
+    {
+        if(!self.spawn_child)
+        {
+            self.spawn_child = true;
+            let file = File::create("out.txt").unwrap();
+            let stdio = Stdio::from(file);
+            self.terminal_app = Some(Command::new("powershell")
+            .stdin(Stdio::piped())
+            .stdout(stdio)
+            .spawn()
+            .expect("Error"));
+            self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+        }
+    }
+    // restarts terminal shell and output stream for clearing
+    fn restart_terminal(&mut self)
+    {
+        let file = File::create("out.txt").unwrap();
+        let stdio = Stdio::from(file);
+        self.terminal_app = Some(Command::new("powershell")
+        .stdin(Stdio::piped())
+        .stdout(stdio)
+        .spawn()
+        .expect("Error"));
+        self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+        self.update_directory = true;
     }
 
     /// show the project tree in a Ui
@@ -181,7 +283,16 @@ impl Project {
                 " clear terminal",
             ).frame(false);
             if ui.add(button).clicked() {
-                self.terminal_buffer.clear();
+                self.persistant_buffer.clear();
+                self.restart_terminal();
+                self.output_buffer.clear();
+            }
+
+            ui.separator();
+
+            if(ui.button("Simulate").clicked())
+            {
+                self.output_buffer += "\nSimulate";
             }
             // Open a window to add changes
             // Commit the changes to the git repo with a user message
@@ -230,6 +341,41 @@ impl Project {
                 git_things.repo = Some(repo);
             }
 
+            ui.separator();
+            /*
+            let id = egui::Id::new("show_serial_monitor");
+            let mut should_show_serial_monitor = ctx.data_mut(|data| {
+                data.get_temp_mut_or(id, false).clone()
+            });
+            */
+            if ui.button("Serial Monitor").clicked(){
+                //display serial monitor window
+
+                //TODO: make serial monitor display on button click
+
+                /*
+                should_show_serial_monitor = true;
+                ctx.data_mut(|data| {
+                    data.insert_temp(id, should_show_serial_monitor);
+                });
+                */
+                // show_serial_monitor();
+
+                let serial_app = Command::new("src/serial_monitor/serial-monitor.exe")
+                    .output()
+                    .expect("Failed to start serial monitor");
+                
+                println!("Serial monitor clicked");
+                
+                /*
+                let port = serialport::new(self.com_port,self.baud_rate)
+                    .timeout(Duration::from_millis(0))
+                    .open().expect("Port opened");
+                let output = "Hello from the alpha build!".as_bytes();
+                port.write(output).expect("Success!");
+                */
+
+            }
         });
     }
 
@@ -284,7 +430,7 @@ impl Project {
                                             let cmd = duct::cmd!("cargo", "-Z", "unstable-options", "-C", path.as_path().to_str().unwrap(), "add", rc.as_str());
                                             self.run_background_commands(&[cmd], ctx);
                                         } else {
-                                            self.terminal_buffer += "save project first!\n";
+                                            self.output_buffer += "save project first!\n";
                                         }
 
                                     };
@@ -397,12 +543,18 @@ impl Project {
 
     pub fn display_generate_new_board(&mut self, ctx: &egui::Context, should_show: &mut bool) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
+        let screen_rect = ctx.input(|i: &egui::InputState| i.screen_rect());
+        let min_rect = screen_rect.shrink2(Vec2::new(100.0, 50.0));
+        let max_rect = screen_rect.shrink(40.0);
         let response = egui::Window::new("Generate TOML File")
             .open(should_show)
             .collapsible(false)
             .resizable(false)
             .movable(false)
-            .anchor(egui::Align2::RIGHT_TOP, [0.0, 0.0])
+            .vscroll(true)
+            .min_size(min_rect.size())
+            .max_size(max_rect.size())
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.label("Fill out all fields. Press X to cancel");
 
@@ -482,7 +634,7 @@ impl Project {
                                 data.insert_temp(standard_required_id, false);
                             });
                         }
-                        if board_toml_info.cpu.is_empty() {
+                        if board_toml_info.cpu.is_empty() && board_toml_info.board_type != BoardType::Discrete {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(cpu_required_id, true);
@@ -492,7 +644,7 @@ impl Project {
                                 data.insert_temp(cpu_required_id, false);
                             });
                         }
-                        if board_toml_info.flash == 0 {
+                        if board_toml_info.flash == 0 && board_toml_info.board_type != BoardType::Discrete {
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(flash_required_id, true);
@@ -502,7 +654,7 @@ impl Project {
                                 data.insert_temp(flash_required_id, false);
                             });
                         }
-                        if board_toml_info.ram == 0 {
+                        if board_toml_info.ram == 0 && board_toml_info.board_type != BoardType::Discrete{
                             invalid_field_flag = true;
                             ctx.data_mut(|data| {
                                 data.insert_temp(ram_required_id, true);
@@ -552,6 +704,9 @@ impl Project {
                             {
                                 let should_show_new_board_image_id = egui::Id::new("should_show_new_board_image");
                                 let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+
+                                // Check if SVG needs to be resized
+                                self.change_svg_size(svg_file_path.clone());
 
                                 ctx.data_mut(|data| {
                                     data.insert_temp(new_board_svg_path_id, svg_file_path);
@@ -624,6 +779,100 @@ impl Project {
 
     }
 
+    pub fn change_svg_size(&mut self, svg_file_path : PathBuf){
+        // CHECK IF WE NEED TO CHANGE SVG IMAGE SIZE
+        // TODO reb understand the errors thrown here
+        let mut svg_string = match fs::read_to_string(svg_file_path.clone()) {
+            Ok(string) => string,
+            Err(e) => String::new(),
+        };
+
+        let mut width = 0.0;
+        let mut height = 0.0;
+        let mut index = 0;
+        while let Some(width_start) = svg_string[index..].find("width=\"") {
+            let width_start = index + width_start;
+
+            // Ignore if "inkscape:window-width="
+            if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
+                index = width_start + 7;
+            } else {
+                let width_end = svg_string[width_start + 7..].find("\"").unwrap();
+                let width_value = &svg_string[width_start + 7..width_start + 7 + width_end];
+                width = width_value.parse().unwrap();
+                break;
+            }
+        }
+
+        index = 0; // Reset index for height extraction
+        while let Some(height_start) = svg_string[index..].find("height=\"") {
+            let height_start = index + height_start;
+
+            // Ignore if "inkscape:window-height="
+            if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
+                index = height_start + 8;
+            } else {
+                let height_end = svg_string[height_start + 8..].find("\"").unwrap();
+                let height_value = &svg_string[height_start + 8..height_start + 8 + height_end];
+                height = height_value.parse().unwrap();
+                break;
+            }
+        }
+
+        if width > 80.0 || height > 80.0 {
+            // MUST RESIZE
+            while width > 80.0 || height > 80.0 {
+                width = width / 2.0;
+                height = height / 2.0;
+            }
+
+            index = 0;
+            while let Some(width_start) = svg_string[index..].find("width=\"") {
+                let width_start = index + width_start;
+
+                // Ignore if "inkscape:window-width="
+                if width_start > 0 && svg_string[width_start - 1..].starts_with('-') {
+                    index = width_start + 7;
+                } else {
+                    let width_end = svg_string[width_start + 7..].find("\"").unwrap();
+                    svg_string.replace_range(width_start + 7..width_start + 7 + width_end, width.to_string().as_str());
+                    index = width_start + 7;
+                }
+            }
+
+            index = 0;
+            while let Some(height_start) = svg_string[index..].find("height=\"") {
+                let height_start = index + height_start;
+
+                // Ignore if "inkscape:window-width="
+                if height_start > 0 && svg_string[height_start - 1..].starts_with('-') {
+                    index = height_start + 8;
+                } else {
+                    let height_end = svg_string[height_start + 8..].find("\"").unwrap();
+                    svg_string.replace_range(height_start + 8..height_start + 8 + height_end, height.to_string().as_str());
+                    index = height_start + 8;
+                }
+            }
+
+            index = 0;
+            let viewbox_string = width.to_string() + " " + height.to_string().as_str();
+            if let Some(viewbox_start) = svg_string.find("viewBox=\"0 0 ") {
+                let viewbox_start = index + viewbox_start;
+
+                let viewbox_end = svg_string[viewbox_start + 13..].find("\"").unwrap();
+                svg_string.replace_range(viewbox_start + 13..viewbox_start + 13 + viewbox_end, viewbox_string.as_str());
+            }
+
+            // TODO reb understand the errors thrown here
+            let svg_res = fs::write(svg_file_path.clone(), svg_string);
+
+            match svg_res {
+                Ok(r) => {}
+                Err(e) => {info!("Create SVG file failed")}
+            }
+        }
+    }
+
     // TODO reb - save_new_board_info error handling
     pub fn save_new_board_info(&mut self, ctx: &egui::Context) {
         let board_toml_info_id = egui::Id::new("board_toml_info");
@@ -684,12 +933,13 @@ impl Project {
                 for pin in pin_rects{
                     let x = (pin.center().x - image_pos.clone().x)/10.0;
                     let y = (pin.center().y - image_pos.clone().y)/10.0;
+                    let radius = pin.height()/2.0/10.0;
                     let pin_string = format!("    <circle\n       \
                            style=\"fill:#ff00ff;fill-opacity:0.561475;stroke-width:1.19048\"\n       \
                            id=\"{}\"\n       \
                            cx=\"{}\"\n       \
                            cy=\"{}\"\n       \
-                           r=\"0.8\" />\n", pin_names[index], x, y);
+                           r=\"{}\" />\n", pin_names[index], x, y, radius);
                     pin_rects_string.push_str(pin_string.as_str());
                     index += 1;
                 }
@@ -736,7 +986,7 @@ impl Project {
             .collapsible(false)
             .resizable(false)
             .movable(false)
-            .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
 
                 let svg_path  = ctx.data_mut(|data| {
@@ -756,8 +1006,6 @@ impl Project {
                 });
                 let mut b = Board::default();
 
-                //TODO reb - consider changing size fields of svg
-
                 match SvgBoardInfo::from_path(svg_path.as_ref()) {
 
                     Ok(svg_board_info) => {
@@ -772,7 +1020,7 @@ impl Project {
 
                         let display_size = b.svg_board_info.unwrap().physical_size * 10.0;
 
-                        let image_rect = retained_image.show_max_size(ui, display_size).rect;
+                        let image_rect = retained_image.show_size(ui, display_size).rect;
 
                         ctx.data_mut(|data| {
                             data.insert_temp(image_pos_id, image_rect.left_top());
@@ -882,6 +1130,9 @@ impl Project {
                                 .add_filter("SVG Filter", &["svg"])
                                 .pick_file()
                             {
+                                // Check if SVG needs to be resized
+                                self.change_svg_size(svg_file_path.clone());
+
                                 ctx.data_mut(|data| {
                                     data.insert_temp(new_board_svg_path_id, svg_file_path);
                                 });
@@ -1216,53 +1467,6 @@ impl Project {
         }
         ctx.data_mut(|data| {
             data.insert_temp(known_board_id, should_show_boards_window);
-        });
-
-        // AUTO GENERATE BOARDS WINDOWS
-
-        // Show the generate boards window, if needed
-        let generate_boards_id = egui::Id::new("show_generate_boards");
-        let new_board_image_id = egui::Id::new("should_show_new_board_image");
-
-        let mut should_show_generate_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(generate_boards_id, false).clone()
-        });
-        let mut should_show_new_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_image_id, false).clone()
-        });
-        if should_show_generate_board_window && !should_show_new_board_window {
-            self.display_generate_new_board(ctx, &mut should_show_generate_board_window);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(generate_boards_id, should_show_generate_board_window);
-        });
-
-        // Show the new board window for adding pinouts, if needed
-        should_show_new_board_window = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_image_id, false).clone()
-        });
-
-        if should_show_new_board_window {
-            ctx.data_mut(|data| {
-                data.insert_temp(generate_boards_id, false);
-            });
-            self.display_new_board_png(ctx, &mut should_show_new_board_window);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(new_board_image_id, should_show_new_board_window);
-        });
-
-        // Show the confirmation screen, if needed
-        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
-        let mut should_show_confirmation = ctx.data_mut(|data| {
-            data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
-        });
-
-        if should_show_confirmation {
-            self.display_new_board_confirmation(ctx, &mut should_show_confirmation);
-        }
-        ctx.data_mut(|data| {
-            data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
         });
 
         // let location_text = self.get_location();

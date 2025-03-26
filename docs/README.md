@@ -90,7 +90,7 @@ SVG parser only support PNG image types
       - Add supporting error messages for the user when the ImageNotPNG error is thrown
         - “SVG Image must be derived from a PNG”
     - Add Unit Tests for generating TOML File and SVG File
-  - Renode Simulator
+- Renode Simulator
     - Added better integration of Renode within Iron Coder with the ability to launch a predetermined script for testing
     - Added the option to open and close Renode
     - Added separate threads to read Renode output
@@ -108,3 +108,4 @@ parameters that are needed to describe the boards and work within the hardware e
   - Tree command in windows OS causes crash, possibly due to string variable not being able to hold data from shell output
   - When an SVG image element is very large, it will take up the entire designate pins window and some of the window elements are not accessible (instructions and cancel button)
   - Renode does not automatically compile code done within the window so will require user to compile before starting the script 
+
