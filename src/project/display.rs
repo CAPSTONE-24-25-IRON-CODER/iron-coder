@@ -1108,7 +1108,7 @@ impl Project {
                                 }
                             }
                             if file_select_error {
-                                ui.label(format!("Error reading file: {}", error_string));
+                                ui.label(format!("Error reading new file: {}", error_string));
                             }
                         },
                     };
