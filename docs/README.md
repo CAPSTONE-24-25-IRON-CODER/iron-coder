@@ -95,6 +95,19 @@ SVG parser only support PNG image types
     - Added the option to open and close Renode
     - Added separate threads to read Renode output
     - Added another thread for state saving every 5 minutes
+# Iron Coder Work Done (Release Candidate)
+- Automate Generation of Boards
+  - Users no longer need to restart the application to use their new component
+  - Board generation windows are now displayed separately from the hardware editor to improve aesthetics and performance
+  - Users can now use PNG image files to create their boards, SVG files to create their boards, or select a default board image option
+    - Sub-system created to convert PNG file contents to SVG 
+  - For both PNG and SVG file inputs, systems were added to automatically resize the image to be compatible with the Iron Coder UI
+  - An improved interface for the Designate Pins window allows users to provide pin names for the TOML form and the board image simultaneously
+  - Bug fixes
+    - Fix bug where program crashed when attempt to read SVG files that had units included for the height and width fields 
+    - Removed unwrapped statements from Automate Generation of Boards subsystem and added a failure error screen for file I/O errors
+    - Stopped irrelevant fields, such as CPU, from preventing creation of peripheral and discrete devices
+    - Out of caution, store the SVG contents as a string after opening the provided file rather than storing the file path and continuously opening the file located on the user’s local filesystem
 
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
