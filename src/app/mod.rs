@@ -346,7 +346,7 @@ impl IronCoderApp {
                         self.start_renode();
                     }
 
-                    if ui.button("Load Test Script").clicked() {
+                    if ui.button("Load Script").clicked() {
                         self.project.build_and_create_script(ctx);
                         println!("Test script loaded.");
                         //self.send_command("i $CWD/src/app/simulator/renode/scripts/STM32Test.resc");

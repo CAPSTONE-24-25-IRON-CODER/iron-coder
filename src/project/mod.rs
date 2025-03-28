@@ -364,8 +364,11 @@ impl Project {
     
     // Get the path to the ELF file after building the project
     fn get_elf_file_path(&self, project_path: &Path) -> Option<PathBuf> {
+        let target = self.get_project_build_target(project_path)
+        .unwrap_or_else(|| "thumbv6m-none-eabi".to_string());
+
         if let Some(package_name) = self.get_package_name_from_toml(project_path) {
-            let target_dir = project_path.join("target/thumbv6m-none-eabi/debug");
+            let target_dir = project_path.join(format!("target/{}/debug", target));
             let elf_file_path = target_dir.join(&package_name);
     
             // Try with and without an extension
@@ -385,36 +388,35 @@ impl Project {
         }
     }
 
+    fn get_project_build_target(&self, project_path: &Path) -> Option<String> {
+        let cargo_config_path = project_path.join(".cargo/config.toml");
+        
+        if cargo_config_path.exists() {
+            let config_content = fs::read_to_string(&cargo_config_path).ok()?;
+            let parsed_toml: Value = config_content.parse().ok()?;
 
-fn get_project_build_target(project_path: &Path) -> Option<String> {
-    let cargo_config_path = project_path.join(".cargo/config.toml");
-    
-    if cargo_config_path.exists() {
-        let config_content = fs::read_to_string(&cargo_config_path).ok()?;
-        let parsed_toml: Value = config_content.parse().ok()?;
+            return parsed_toml.get("build")
+                .and_then(|build| build.get("target"))
+                .and_then(|target| target.as_str())
+                .map(|s| s.to_string());
+        }
 
-        return parsed_toml.get("build")
-            .and_then(|build| build.get("target"))
-            .and_then(|target| target.as_str())
-            .map(|s| s.to_string());
+        // Fallback: If `.cargo/config.toml` doesn’t exist, check `Cargo.toml`
+        let cargo_toml_path = project_path.join("Cargo.toml");
+
+        if cargo_toml_path.exists() {
+            let cargo_content = fs::read_to_string(&cargo_toml_path).ok()?;
+            let parsed_toml: Value = cargo_content.parse().ok()?;
+
+            return parsed_toml.get("package")
+                .and_then(|pkg| pkg.get("metadata"))
+                .and_then(|metadata| metadata.get("build-target"))
+                .and_then(|target| target.as_str())
+                .map(|s| s.to_string());
+        }
+
+        None
     }
-
-    // Fallback: If `.cargo/config.toml` doesn’t exist, check `Cargo.toml`
-    let cargo_toml_path = project_path.join("Cargo.toml");
-
-    if cargo_toml_path.exists() {
-        let cargo_content = fs::read_to_string(&cargo_toml_path).ok()?;
-        let parsed_toml: Value = cargo_content.parse().ok()?;
-
-        return parsed_toml.get("package")
-            .and_then(|pkg| pkg.get("metadata"))
-            .and_then(|metadata| metadata.get("build-target"))
-            .and_then(|target| target.as_str())
-            .map(|s| s.to_string());
-    }
-
-    None
-}
 
 
     pub fn new_file(&mut self) -> io::Result<()> {
