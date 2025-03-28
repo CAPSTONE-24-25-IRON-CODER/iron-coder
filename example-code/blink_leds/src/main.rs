@@ -17,7 +17,7 @@ use hal::{
     pac::interrupt,
     clocks::{init_clocks_and_plls, Clock},
     pac,
-    watchdog::Watchdog,
+    watchdog::Watchdog,	
     Sio,
 };
 use adafruit_feather_rp2040::{
@@ -57,7 +57,7 @@ fn main() -> ! {
     );
 
     let mut timer = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
-    let mut led_pin = pins.d13.into_push_pull_output();
+    let mut led_pin = pins.d13.into_push_pull_output();					
 
     /*
     Loop Section
