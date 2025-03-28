@@ -190,7 +190,6 @@ impl IronCoderApp {
 
         app.project.spawn_child = false;
         app.project.update_directory = true;
-
         return app;
     }
 
@@ -215,20 +214,30 @@ impl IronCoderApp {
 
     // start, you do not need the threads to run the commands
     // more important line was the .arg("--console") to allow commands to be passed in
-    fn start_renode(&mut self) {
+    pub fn start_renode(&mut self) {
         if self.renode_process.is_some() {
             println!("Renode is already running.");
             return;
         }
 
-        let mut child = Command::new("renode")
+        let mut result_child = Command::new("renode")
             //.arg("--disable-xwt")
             .arg("--console")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
-            .expect("Failed to start Renode");
+            .spawn();
+        let mut child: Child;
+        if(result_child.is_ok())
+        {
+            child = result_child.unwrap();
+        }
+        else 
+        {
+            info!("Renode Not Installed");
+            return;
+        }
+        
 
         println!("Renode started!");
 
@@ -522,7 +531,7 @@ impl IronCoderApp {
 
         egui::Area::new(egui::Id::new("editor area")).show(ctx, |_ui| {
             egui::TopBottomPanel::bottom("terminal_panel").resizable(true).max_height(_ui.available_height()*0.75).show(ctx, |ui| {
-                project.display_terminal(ctx, ui);
+                project.display_bottom_pane(ctx, ui);
             });
             egui::TopBottomPanel::bottom("editor_control_panel").show(ctx, |ui| {
                 project.display_project_toolbar(ctx, ui, &mut self.git_things);

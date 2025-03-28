@@ -14,6 +14,7 @@ use std::process;
 use std::process::Child;
 use std::process::ChildStdin;
 use std::process::ChildStdout;
+use std::sync::{Arc, Mutex};
 
 use rfd::FileDialog;
 
@@ -24,6 +25,7 @@ use crate::app::code_editor::CodeEditor;
 
 pub mod display;
 use display::ProjectViewType;
+use display::BottomPaneViewType;
 
 
 pub mod egui_helpers;
@@ -65,11 +67,14 @@ pub struct Project {
     terminal_buffer: String,
     persistant_buffer: String,
     output_buffer: String,
+    simulator_command_buffer: String,
     pub update_directory: bool,
     directory: String,
     #[serde(skip)]
     receiver: Option<std::sync::mpsc::Receiver<String>>,
     current_view: ProjectViewType,
+    #[serde(skip)]
+    bottom_view: Option<BottomPaneViewType>,
     #[serde(skip)]
     pub known_boards: Vec<Board>,
     #[serde(skip)]
@@ -81,6 +86,11 @@ pub struct Project {
     terminal_stdin: Option<ChildStdin>,
     #[serde(skip)]
     terminal_stdout: Option<ChildStdout>,
+    #[serde(skip)]
+    renode_process: Option<Child>,
+    renode_output: Arc<Mutex<String>>,
+    #[serde(skip)]
+    stdin: Option<Arc<Mutex<std::process::ChildStdin>>>,
 }
 
 // backend functionality for Project struct
@@ -139,7 +149,7 @@ impl Project {
                         // don't duplicate a peripheral board
                         if self.system.peripheral_boards.contains(&board) {
                             info!("project <{}> already contains board <{:?}>", self.name, board);
-                            self.terminal_buffer += "project already contains that board\n";
+                            self.output_buffer += "project already contains that board\n";
                             return;
                         } else {
                             self.system.peripheral_boards.push(board.clone());
