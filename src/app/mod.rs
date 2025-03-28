@@ -17,6 +17,7 @@ use std::process::{Command, Stdio, Child, ChildStdin};
 use std::io::{Write, Read, BufRead, BufReader};
 use std::thread;
 use std::time::Duration;
+use webbrowser;
 
 // use egui_modal::Modal;
 
@@ -59,7 +60,9 @@ pub struct Warnings {
     pub display_unnamed_project_warning: bool,
     pub display_git_warning: bool,
     pub display_invalid_name_warning: bool,
-    pub display_unsaved_tab_warning: bool
+    pub display_unsaved_tab_warning: bool,
+    #[serde(skip)]
+    pub dispplay_renode_missing_warning: bool,
 }
 
 // The current git state
@@ -108,10 +111,12 @@ pub struct IronCoderApp {
     warning_flags: Warnings,
     git_things: Git,
     settings: Settings,
+    #[serde(skip)]
     simulator_open: bool,
 
     #[serde(skip)]
     renode_process: Option<Child>,
+    #[serde(skip)]
     renode_output: Arc<Mutex<String>>,
 
     #[serde(skip)]
@@ -140,7 +145,8 @@ impl Default for IronCoderApp {
                 display_unnamed_project_warning: false,
                 display_invalid_name_warning: false,
                 display_git_warning: false,
-                display_unsaved_tab_warning: false
+                display_unsaved_tab_warning: false,
+                dispplay_renode_missing_warning: false,
             },
             git_things: Git {
                 display: false,
@@ -221,15 +227,38 @@ impl IronCoderApp {
             println!("Renode is already running.");
             return;
         }
+        
+        // we need to add a check to see if renode is intalled
+        let check_command = if cfg!(target_os = "windows") { "where" } else { "which" };
 
-        let mut child = Command::new("renode")
+        let renode_exists = Command::new(check_command)
+            .arg("renode")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+    
+        if !renode_exists {
+            println!("Error: Renode is not installed or not found in PATH.");
+            self.warning_flags.dispplay_renode_missing_warning = true;
+            return;
+        }
+
+        let mut child = match Command::new("renode")
             //.arg("--disable-xwt")
-            .arg("--console")
+            //.arg("--console")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("Failed to start Renode");
+            {
+                Ok(child) => child,
+                Err(e) => {
+                println!("Failed to start Renode: {}", e);
+                return;
+                }
+            };
 
         println!("Renode started!");
 
@@ -337,31 +366,24 @@ impl IronCoderApp {
                     .show(ui, |ui| {
                         ui.text_edit_multiline(&mut log.clone());
                     });
+
+
+                    if self.warning_flags.dispplay_renode_missing_warning {
+                        egui::Window::new("Renode Not Found")
+                            .collapsible(false)
+                            .resizable(false)
+                            .show(ctx, |ui| {
+                                ui.label("Renode is not installed or not found in your PATH.");
+                                if ui.button("Download Renode").clicked() {
+                                    let _ = webbrowser::open("https://github.com/renode/renode");
+                                }
+                                if ui.button("Close").clicked() {
+                                    self.warning_flags.dispplay_renode_missing_warning = false;
+                                }
+                            });
+                    }
+    
                 });
-
-                // let mut child: Child = Command::new("renode")
-                //     .stdin(Stdio::piped())
-                //     .stdout(Stdio::piped())
-                //     .spawn()
-                //     .expect("Error");
-
-                // let mut input: String = String::new();
-                // let mut exit: bool = false;
-
-                // let mut shell_in = child.stdin.take().unwrap();
-                // shell_in.write_all("i src/app/simulator/renode/scripts/STM32Test.resc".as_bytes());
-                // let mut shell_out = child.stdout.take().unwrap();
-
-                // let mut buf: Vec<u8> = Vec::new();
-
-                // shell_out.read_to_end(&mut buf).unwrap();
-
-                // println!("{}", String::from_utf8(buf).unwrap());
-
-
-                // let stdout = String::from_utf8(output.stdout).unwrap();
-                // println!("stdout: {}", stdout);
-
         }
     }
 

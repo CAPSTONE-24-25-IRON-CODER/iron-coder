@@ -39,6 +39,7 @@ generate = "1.5.0"
 savefile-derive = "0.17.4"
 k_board = "1.2.2"
 git2 = "0.19.0"
+webbrowser = "1.0.4"
 
 [profile.release]
 opt-level = 'z'
