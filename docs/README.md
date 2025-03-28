@@ -119,6 +119,5 @@ parameters that are needed to describe the boards and work within the hardware e
   - Sometimes drawn wire connections will appear on top of the add board menu and other windows
   - More than one discrete component cannot be added to the hardware editor
   - Tree command in windows OS causes crash, possibly due to string variable not being able to hold data from shell output
-  - When an SVG image element is very large, it will take up the entire designate pins window and some of the window elements are not accessible (instructions and cancel button)
   - Renode does not automatically compile code done within the window so will require user to compile before starting the script 
 
