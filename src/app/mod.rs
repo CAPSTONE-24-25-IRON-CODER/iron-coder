@@ -247,7 +247,7 @@ impl IronCoderApp {
 
         let mut child = match Command::new("renode")
             //.arg("--disable-xwt")
-            //.arg("--console")
+            .arg("--console")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -347,7 +347,10 @@ impl IronCoderApp {
                     }
 
                     if ui.button("Load Test Script").clicked() {
-                        self.send_command("i $CWD/src/app/simulator/renode/scripts/STM32Test.resc");
+                        self.project.build_and_create_script(ctx);
+                        println!("Test script loaded.");
+                        //self.send_command("i $CWD/src/app/simulator/renode/scripts/STM32Test.resc");
+                        self.send_command("i $CWD\\src\\app\\simulator\\renode\\scripts\\generated/currentScript.resc");
                     }
 
                     if ui.button("Close Simulator").clicked() {
