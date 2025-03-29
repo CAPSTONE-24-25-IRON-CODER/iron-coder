@@ -110,8 +110,14 @@ SVG parser only support PNG image types
     - Out of caution, store the SVG contents as a string after opening the provided file rather than storing the file path and continuously opening the file located on the user’s local filesystem
 - Simulator
   - Iron Coder will not crash if the user doesn't have Renode, rather they are prompted to install it
+  - Added support for simultion use in terminal, can run code for STM32f4 discovery board.
+  - Simulation output and commands accepted in simulation tab.
   - Script generation is made easier for the user to they can focus on testing
     - Users should be able to just load in a generated script that allows them to select board, elf file, and logging settings depending on what they want to see.
+- Terminal
+  - Fixed issues with parsing colored text in terminal when running certain powershell extensions.
+  - Added multiple tabs to terminal pane for switching between output, terminal, and simulator.
+  - Added error handling if shell is not able to be opened on launch. 
 
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
