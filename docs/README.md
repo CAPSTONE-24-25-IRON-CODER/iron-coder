@@ -108,6 +108,10 @@ SVG parser only support PNG image types
     - Removed unwrapped statements from Automate Generation of Boards subsystem and added a failure error screen for file I/O errors
     - Stopped irrelevant fields, such as CPU, from preventing creation of peripheral and discrete devices
     - Out of caution, store the SVG contents as a string after opening the provided file rather than storing the file path and continuously opening the file located on the user’s local filesystem
+- Simulator
+  - Iron Coder will not crash if the user doesn't have Renode, rather they are prompted to install it
+  - Script generation is made easier for the user to they can focus on testing
+    - Users should be able to just load in a generated script that allows them to select board, elf file, and logging settings depending on what they want to see.
 
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
