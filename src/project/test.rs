@@ -43,12 +43,18 @@ mod project_tests {
 
         let mut ctx = egui::Context::default();
         let board_toml_info_id = egui::Id::new("board_toml_info");
-        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let new_board_svg_string_id = egui::Id::new("new_board_svg_string");
         ctx.data_mut(|data| {
             data.insert_temp(board_toml_info_id, board_toml);
         });
+
+        let svg_string = match fs::read_to_string( PathBuf::from("./iron-coder-boards/Arduino/Arduino_Uno/arduino_uno.svg")) {
+            Ok(string) => string,
+            Err(e) => String::new(),
+        };
+
         ctx.data_mut(|data| {
-            data.insert_temp(new_board_svg_path_id, PathBuf::from("./iron-coder-boards/Arduino/Arduino_Uno/arduino_uno.svg"));
+            data.insert_temp(new_board_svg_string_id, svg_string);
         });
 
         Project::save_new_board_info(&mut project, &mut ctx);
@@ -116,12 +122,18 @@ mod project_tests {
 
         let mut ctx = egui::Context::default();
         let board_toml_info_id = egui::Id::new("board_toml_info");
-        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let new_board_svg_string_id = egui::Id::new("new_board_svg_string");
         ctx.data_mut(|data| {
             data.insert_temp(board_toml_info_id, board_toml);
         });
+
+        let svg_string = match fs::read_to_string( PathBuf::from("./iron-coder-boards/Arduino/Arduino_Uno/arduino_uno.svg")) {
+            Ok(string) => string,
+            Err(e) => String::new(),
+        };
+
         ctx.data_mut(|data| {
-            data.insert_temp(new_board_svg_path_id, PathBuf::from("./iron-coder-boards/Arduino/Arduino_Uno/arduino_uno.svg"));
+            data.insert_temp(new_board_svg_string_id, svg_string);
         });
 
 
@@ -190,12 +202,19 @@ mod project_tests {
 
         let mut ctx = egui::Context::default();
         let board_toml_info_id = egui::Id::new("board_toml_info");
-        let new_board_svg_path_id = egui::Id::new("new_board_svg_path");
+        let new_board_svg_string_id = egui::Id::new("new_board_svg_string");
+        let save_failure_id = egui::Id::new("save_board_FAILED");
         ctx.data_mut(|data| {
             data.insert_temp(board_toml_info_id, board_toml);
         });
+
+        let svg_string = match fs::read_to_string( PathBuf::from("./iron-coder-boards/Arduino/Arduino_Uno/arduino_uno.svg")) {
+            Ok(string) => string,
+            Err(e) => String::new(),
+        };
+
         ctx.data_mut(|data| {
-            data.insert_temp(new_board_svg_path_id, PathBuf::from("./iron-coder-boards/Arduino/file_does_not_exist/arduino_uno.svg"));
+            data.insert_temp(new_board_svg_string_id, svg_string);
         });
 
 
@@ -211,7 +230,6 @@ mod project_tests {
         };
 
         assert!(!toml_string.is_empty());
-        assert!(svg_string.is_empty());
 
     }
 

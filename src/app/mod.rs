@@ -500,6 +500,12 @@ impl IronCoderApp {
         });
     }
 
+    /// Read boards from the file system
+    pub fn set_boards(&mut self){
+        let boards_dir = Path::new("./iron-coder-boards"); // consider making this a global macro
+        self.boards = board::get_boards(boards_dir);
+    }
+
     /// Returns a copy of the list of available boards.
     pub fn get_boards(&self) -> Vec<board::Board> {
         self.boards.clone()
@@ -544,6 +550,8 @@ impl IronCoderApp {
         let generate_boards_id = egui::Id::new("show_generate_boards");
         let new_board_image_id = egui::Id::new("should_show_new_board_image");
         let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+        let reload_boards_id = egui::Id::new("reload_boards_from_filesystem");
+        let save_failure_id = egui::Id::new("save_board_FAILED");
 
         // Show the generate boards window, if needed
         let mut should_show_generate_board_window = ctx.data_mut(|data| {
@@ -584,12 +592,32 @@ impl IronCoderApp {
                 let mut should_show_confirmation = ctx.data_mut(|data| {
                     data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
                 });
+                let mut save_failed = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(save_failure_id, false).clone()
+                });
+                let mut reload_boards = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(reload_boards_id, false).clone()
+                });
 
-                if should_show_confirmation {
-                    self.project.display_new_board_confirmation(ctx, &mut should_show_confirmation);
+                if reload_boards {
+                    self.set_boards();
+                    self.project.known_boards = self.boards.clone();
+                    ctx.data_mut(|data| {
+                        data.insert_temp(reload_boards_id, false);
+                    });
                 }
+
+                if should_show_confirmation && !save_failed{
+                    self.project.display_new_board_confirmation(ctx, &mut should_show_confirmation);
+                } else if save_failed {
+                    self.project.display_new_board_failure(ctx, &mut save_failed);
+                }
+
                 ctx.data_mut(|data| {
                     data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
+                });
+                ctx.data_mut(|data| {
+                    data.insert_temp(save_failure_id, save_failed);
                 });
             });
 
