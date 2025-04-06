@@ -377,30 +377,43 @@ impl Project {
         self.display_directory(dir, 0, ctx, ui);
     }
 
-    pub fn start_renode(&mut self) {
+    pub fn start_renode(&mut self, ctx: &egui::Context ,warning_flags: &mut Warnings) {
         if self.renode_process.is_some() {
             println!("Renode is already running.");
             return;
         }
 
-        let mut result_child = Command::new("renode")
+        // we need to add a check to see if renode is intalled
+        let check_command = if cfg!(target_os = "windows") { "where" } else { "which" };
+
+        let renode_exists = Command::new(check_command)
+            .arg("renodeTest")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+    
+        if !renode_exists {
+            println!("Error: Renode is not installed or not found in PATH.");
+            warning_flags.display_renode_missing_warning = true;
+            return;
+        }
+
+        let mut child: Child = match Command::new("renodeTest")
             //.arg("--disable-xwt")
             .arg("--console")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn();
-        let mut child: Child;
-        if(result_child.is_ok())
-        {
-            child = result_child.unwrap();
-        }
-        else 
-        {
-            info!("Renode Not Installed");
-            return;
-        }
-        
+            .spawn()
+            {
+                Ok(child) => child,
+                Err(e) => {
+                println!("Failed to start Renode: {}", e);
+                return;
+            }
+            };        
 
         println!("Renode started!");
 
@@ -501,7 +514,7 @@ impl Project {
     }
 
     /// Show the project toolbar, with buttons to perform various actions
-    pub fn display_project_toolbar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, git_things: &mut Git) {
+    pub fn display_project_toolbar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, git_things: &mut Git, warning_flags: &mut Warnings) {
         let iconref: Arc<IconSet> = ctx.data_mut(|data| {
             data.get_temp("icons".into()).expect("error loading shared icons!")
         });
@@ -579,7 +592,8 @@ impl Project {
             {
                 if(self.location.is_some())
                 {
-                    self.start_renode();
+                    // Start Renode will check for renode and if there start it.
+                    self.start_renode(ctx ,warning_flags);
                     // create machine
                     self.send_command("mach create");
                     // load custom platform (only one thats reliable right now is the stm32f4)

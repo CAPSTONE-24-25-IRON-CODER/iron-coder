@@ -62,7 +62,7 @@ pub struct Warnings {
     pub display_invalid_name_warning: bool,
     pub display_unsaved_tab_warning: bool,
     #[serde(skip)]
-    pub dispplay_renode_missing_warning: bool,
+    pub display_renode_missing_warning: bool,
 }
 
 // The current git state
@@ -146,7 +146,7 @@ impl Default for IronCoderApp {
                 display_invalid_name_warning: false,
                 display_git_warning: false,
                 display_unsaved_tab_warning: false,
-                dispplay_renode_missing_warning: false,
+                display_renode_missing_warning: false,
             },
             git_things: Git {
                 display: false,
@@ -240,11 +240,11 @@ impl IronCoderApp {
     
         if !renode_exists {
             println!("Error: Renode is not installed or not found in PATH.");
-            self.warning_flags.dispplay_renode_missing_warning = true;
+            self.warning_flags.display_renode_missing_warning = true;
             return;
         }
 
-        let mut child = match Command::new("renode")
+        let mut child: Child = match Command::new("renode")
             //.arg("--disable-xwt")
             .arg("--console")
             .stdin(Stdio::piped())
@@ -370,20 +370,20 @@ impl IronCoderApp {
                     });
 
 
-                    if self.warning_flags.dispplay_renode_missing_warning {
-                        egui::Window::new("Renode Not Found")
-                            .collapsible(false)
-                            .resizable(false)
-                            .show(ctx, |ui| {
-                                ui.label("Renode is not installed or not found in your PATH.");
-                                if ui.button("Download Renode").clicked() {
-                                    let _ = webbrowser::open("https://github.com/renode/renode");
-                                }
-                                if ui.button("Close").clicked() {
-                                    self.warning_flags.dispplay_renode_missing_warning = false;
-                                }
-                            });
-                    }
+                    // if self.warning_flags.display_renode_missing_warning {
+                    //     egui::Window::new("Renode Not Found")
+                    //         .collapsible(false)
+                    //         .resizable(false)
+                    //         .show(ctx, |ui| {
+                    //             ui.label("Renode is not installed or not found in your PATH.");
+                    //             if ui.button("Download Renode").clicked() {
+                    //                 let _ = webbrowser::open("https://github.com/renode/renode");
+                    //             }
+                    //             if ui.button("Close").clicked() {
+                    //                 self.warning_flags.display_renode_missing_warning = false;
+                    //             }
+                    //         });
+                    // }
     
                 });
         }
@@ -550,7 +550,7 @@ impl IronCoderApp {
                 project.display_bottom_pane(ctx, ui);
             });
             egui::TopBottomPanel::bottom("editor_control_panel").show(ctx, |ui| {
-                project.display_project_toolbar(ctx, ui, &mut self.git_things);
+                project.display_project_toolbar(ctx, ui, &mut self.git_things, &mut self.warning_flags);
             });
             egui::TopBottomPanel::top("editor_tabs").show(ctx, |ui| {
                 project.code_editor.display_editor_tabs(ctx, ui, &mut self.warning_flags);
@@ -1082,7 +1082,19 @@ impl IronCoderApp {
 
     }
     pub fn display_serial_monitor(&mut self, ctx: &egui::Context){
+    }
 
+    pub fn display_renode_missing_warning(&mut self, ctx: &egui::Context) {
+        egui::Window::new("Renode Not Found")
+        .open(&mut  self.warning_flags.display_renode_missing_warning)
+        .collapsible(true)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.label("Renode is not installed or not found in your PATH.");
+            if ui.button("Download Renode").clicked() {
+                let _ = webbrowser::open("https://github.com/renode/renode");
+            }
+        });
     }
 }
 
@@ -1121,6 +1133,7 @@ impl eframe::App for IronCoderApp {
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
         self.display_simulator_window(ctx);
+        self.display_renode_missing_warning(ctx);
 
 
         let save_shortcut = KeyboardShortcut::new(Modifiers::CTRL, Key::S);
