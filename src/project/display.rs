@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{fs, string};
 use std::io::{BufReader, Read, SeekFrom, Write, BufRead};
-use std::os::windows::fs::FileExt;
 use std::path::{Path, PathBuf};
 use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
