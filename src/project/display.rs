@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{fs, string};
 use std::io::{BufReader, Read, SeekFrom, Write, BufRead};
-use std::os::windows::fs::FileExt;
 use std::path::{Path, PathBuf};
 use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
@@ -205,6 +204,8 @@ impl Project {
             let mut lines = Vec::<String>::new();
             let mut file = File::open("out.txt").unwrap();
             let mut last_line = String::from("");
+            // get the current working directory
+            let _ = self.terminal_stdin.as_mut().unwrap().write_all("pwd\n".as_bytes());
             let mut reader = BufReader::new(
             DecodeReaderBytesBuilder::new()
                 .encoding(Some(WINDOWS_1252))
@@ -220,6 +221,10 @@ impl Project {
             if(!lines.is_empty())
             {
                 last_line = lines.last().unwrap().to_string();
+                // remove new line character from end and / at begining
+                last_line.remove(last_line.len() - 1);
+                last_line.remove(0);
+                last_line += "%";
                 if(last_line.contains("%"))
                 {
                     // check if directory was updated and if self.directory needs to be changed as well
@@ -447,10 +452,11 @@ impl Project {
             let file = File::create("out.txt").unwrap();
             let stdio = Stdio::from(file);
             // test to ensure child can be spawned
-            let temp = Command::new("zsh").spawn();
+            let shell = std::env::var("SHELL").unwrap_or("/bin/zsh".to_string());
+            let temp = Command::new(shell.clone()).spawn();
             if(temp.is_ok())
             {
-                self.terminal_app = Some(Command::new("zsh")
+                self.terminal_app = Some(Command::new(shell.clone())
                 .stdin(Stdio::piped())
                 .stdout(stdio)
                 .spawn()
@@ -485,10 +491,11 @@ impl Project {
             let file = File::create("out.txt").unwrap();
             let stdio = Stdio::from(file);
             // test to ensure child can be spawned
-            let temp = Command::new("zsh").spawn();
+            let shell = std::env::var("SHELL").unwrap_or("/bin/zsh".to_string());
+            let temp = Command::new(shell.clone()).spawn();
             if(temp.is_ok())
             {
-                self.terminal_app = Some(Command::new("zsh")
+                self.terminal_app = Some(Command::new(shell.clone())
                 .stdin(Stdio::piped())
                 .stdout(stdio)
                 .spawn()
@@ -712,8 +719,12 @@ impl Project {
             }
 
             ui.separator();
-
-            if(ui.button("Simulate").clicked())
+            let button = egui::widgets::Button::new("Simulate");
+            if(self.system.main_board.as_mut().unwrap().get_name() != "STM32F4 Discovery")
+            {
+                ui.add_enabled(false, button);
+            }
+            else if(ui.add(button).clicked())
             {
                 if(self.location.is_some())
                 {
