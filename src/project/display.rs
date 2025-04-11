@@ -15,7 +15,7 @@ use core::f32;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{fs, string};
-use std::io::{BufReader, Read, SeekFrom, Write, BufRead};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
@@ -206,12 +206,13 @@ impl Project {
             let mut last_line = String::from("");
             // get the current working directory
             let _ = self.terminal_stdin.as_mut().unwrap().write_all("pwd\n".as_bytes());
+            // remove last line from file
             let mut reader = BufReader::new(
             DecodeReaderBytesBuilder::new()
                 .encoding(Some(WINDOWS_1252))
                 .build(file));
             let mut buffer = vec![];
-            reader.read_to_end(&mut buffer).unwrap();
+            let size = reader.read_to_end(&mut buffer).unwrap();
             buffer = strip_ansi_escapes::strip(buffer);
             lines = String::from_utf8(buffer)
             .unwrap()
@@ -237,7 +238,7 @@ impl Project {
             if((self.update_directory && !lines.is_empty()) || (!lines.is_empty() && self.directory.is_empty()))
             {
                 self.directory = last_line;
-                if(self.directory.contains("%"))
+                if(self.directory.contains("%") && !self.directory.ends_with("%"))
                 {
                     let index = self.directory.find("%").unwrap();
                     let _ = self.directory.split_off(index + 2);
@@ -258,7 +259,14 @@ impl Project {
             }
             if(!lines.is_empty())
             {
-                lines.remove(lines.len() - 1);
+                // remove all lines of the directoy from the file
+                for i in 0..(lines.len() - 1)
+                {
+                    if(lines[i] == self.directory)
+                    {
+                        lines.remove(i);
+                    }
+                }
             }
             self.persistant_buffer = lines.join("\n");
             egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
@@ -720,7 +728,7 @@ impl Project {
 
             ui.separator();
             let button = egui::widgets::Button::new("Simulate");
-            if(self.system.main_board.as_mut().unwrap().get_name() != "STM32F4 Discovery")
+            if(!self.system.main_board.as_mut().unwrap().get_name().contains("STM32F4"))
             {
                 ui.add_enabled(false, button);
             }
