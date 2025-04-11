@@ -204,8 +204,17 @@ impl Project {
             let mut lines = Vec::<String>::new();
             let mut file = File::open("out.txt").unwrap();
             let mut last_line = String::from("");
+            let print_directory_mac_id = egui::Id::new("print_directory_mac_id");
+            let mut print_directory_mac = _ctx.data_mut(|data| {
+                data.get_temp_mut_or(print_directory_mac_id, true).clone()
+            });
             // get the current working directory
-            let _ = self.terminal_stdin.as_mut().unwrap().write_all("pwd\n".as_bytes());
+            if print_directory_mac {
+                let _ = self.terminal_stdin.as_mut().unwrap().write_all("pwd\n".as_bytes());
+                _ctx.data_mut(|data| {
+                    data.insert_temp(print_directory_mac_id, false);
+                });
+            }
             // remove last line from file
             let mut reader = BufReader::new(
             DecodeReaderBytesBuilder::new()
@@ -259,14 +268,7 @@ impl Project {
             }
             if(!lines.is_empty())
             {
-                // remove all lines of the directoy from the file
-                for i in 0..(lines.len() - 1)
-                {
-                    if(lines[i] == self.directory)
-                    {
-                        lines.remove(i);
-                    }
-                }
+                lines.remove(lines.len() - 1);
             }
             self.persistant_buffer = lines.join("\n");
             egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
@@ -291,6 +293,9 @@ impl Project {
                         // parse line at carrot to get command to send to shell
                         let index = self.terminal_buffer.find('%');
                         let index_num = index.unwrap_or(0) + 1;
+                        _ctx.data_mut(|data| {
+                            data.insert_temp(print_directory_mac_id, true);
+                        });
     
                         // write command from terminal buffer to child process
                         let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
