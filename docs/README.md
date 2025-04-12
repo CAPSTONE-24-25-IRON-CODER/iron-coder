@@ -118,7 +118,18 @@ SVG parser only support PNG image types
   - Fixed issues with parsing colored text in terminal when running certain powershell extensions.
   - Added multiple tabs to terminal pane for switching between output, terminal, and simulator.
   - Added error handling if shell is not able to be opened on launch. 
-
+# Iron Coder Work Done (Production Release)
+- Installation packages for Windows and macOS
+  - Quickstart documentation posted on Iron Coder Forum
+- Documentation of all new features
+  - Making your First Project
+  - Example Code
+  - Automatic Generation of Boards
+  - Support for Flashing Arduino Boards
+  - Simulator
+  - Serial Monitor Debugger
+- Terminal
+  - Add support for macOS
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
