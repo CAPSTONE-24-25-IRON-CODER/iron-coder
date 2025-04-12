@@ -86,6 +86,8 @@ impl SvgBoardInfo {
                             &image_bytes,
                         );
                         board_image = Some(color_image);
+                    } else {
+                        return Err(Error::ImageNotPNG);
                     }
                 },
                 NodeKind::Path(path) => {
@@ -123,5 +125,6 @@ pub enum Error {
     ImageDecodeError,
     ArcError,
     NoImage,
+    ImageNotPNG,
     OtherError,
 }
