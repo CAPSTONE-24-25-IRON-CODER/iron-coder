@@ -128,6 +128,8 @@ SVG parser only support PNG image types
   - Support for Flashing Arduino Boards
   - Simulator
   - Serial Monitor Debugger
+- Automatic Generation Boards Feature Testing
+  - Tested with non-team members 
 - Terminal
   - Add support for macOS
 # Iron Coder Architecture
