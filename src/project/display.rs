@@ -963,12 +963,6 @@ impl Project {
             }
 
             ui.separator();
-            /*
-            let id = egui::Id::new("show_serial_monitor");
-            let mut should_show_serial_monitor = ctx.data_mut(|data| {
-                data.get_temp_mut_or(id, false).clone()
-            });
-            */
             if ui.button("Serial Monitor").clicked(){
                 //display serial monitor window
 
@@ -987,14 +981,6 @@ impl Project {
                     .expect("Failed to start serial monitor");
                 
                 println!("Serial monitor clicked");
-                
-                /*
-                let port = serialport::new(self.com_port,self.baud_rate)
-                    .timeout(Duration::from_millis(0))
-                    .open().expect("Port opened");
-                let output = "Hello from the alpha build!".as_bytes();
-                port.write(output).expect("Success!");
-                */
 
             }
         });

@@ -12,20 +12,17 @@ use std::sync::{mpsc, Arc, RwLock};
 use std::time::Duration;
 use std::{env, thread};
 
-use crate::serial_monitor::data::{DataContainer, Packet};
-use crate::serial_monitor::gui::{load_gui_settings, SerialMonitor, RIGHT_PANEL_WIDTH};
-use crate::serial_monitor::io::{open_from_csv, save_to_csv, FileOptions};
-use crate::serial_monitor::serial::{load_serial_settings, serial_thread, Device};
+use crate::gui::{DataContainer, Packet};
+use crate::gui::{load_gui_settings, SerialMonitor, RIGHT_PANEL_WIDTH};
+use crate::gui::{save_to_csv, FileOptions};
+use crate::serial::{load_serial_settings, serial_thread, Device};
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui, icon_data};
 use preferences::AppInfo;
 
-mod color_picker;
-mod data;
 mod gui;
-mod io;
+//mod io;
 mod serial;
-mod toggle;
 
 const APP_INFO: AppInfo = AppInfo {
     name: "Serial Monitor",
@@ -79,7 +76,6 @@ fn main_thread(
                         // resetting dataset
                         data.dataset = vec![vec![]; max(split_data.len(), 1)];
                         failed_format_counter = 0;
-                        // log::error!("resetting dataset. split length = {}, length data.dataset = {}", split_data.len(), data.dataset.len());
                     } else if split_data.len() == data.dataset.len() {
                         // appending data
                         for (i, set) in data.dataset.iter_mut().enumerate() {
@@ -96,10 +92,10 @@ fn main_thread(
                     } else {
                         // not same length
                         failed_format_counter += 1;
-                        // log::error!("not same length in main! length split_data = {}, length data.dataset = {}", split_data.len(), data.dataset.len())
                     }
                 }
             }
+
         }
         if let Ok(fp) = load_rx.recv_timeout(Duration::from_millis(10)) {
             if let Some(file_ending) = fp.extension() {
@@ -112,22 +108,9 @@ fn main_thread(
                             save_raw_traffic: false,
                             names: vec![],
                         };
-                        match open_from_csv(&mut data, &mut file_options) {
-                            Ok(_) => {
-                                log::info!("opened {:?}", fp);
-                                load_names_tx
-                                    .send(file_options.names)
-                                    .expect("unable to send names on channel after loading");
-                            }
-                            Err(err) => {
-                                file_opened = false;
-                                log::error!("failed opening {:?}: {:?}", fp, err);
-                            }
-                        };
                     }
                     _ => {
                         file_opened = false;
-                        log::error!("file not supported: {:?} \n Close the file to connect to a spectrometer or open another file.", fp);
                         continue;
                     }
                 }
@@ -159,7 +142,7 @@ fn main_thread(
     }
 }
 
-pub fn show_serial_monitor() {
+fn show_serial_monitor() {
     egui_logger::builder().init().unwrap();
 
     let gui_settings = load_gui_settings();
@@ -238,7 +221,7 @@ pub fn show_serial_monitor() {
             egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
             ctx.egui_ctx.set_fonts(fonts);
             ctx.egui_ctx.set_visuals(Visuals::dark());
-            egui_extras::install_image_loaders(&ctx.egui_ctx);
+            //egui_extras::install_image_loaders(&ctx.egui_ctx);
 
             let repaint_signal = ctx.egui_ctx.clone();
             thread::spawn(move || loop {
@@ -265,4 +248,8 @@ pub fn show_serial_monitor() {
     ) {
         log::error!("{e:?}");
     }
+}
+
+fn main(){
+    show_serial_monitor();
 }
