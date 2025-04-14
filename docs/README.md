@@ -90,7 +90,48 @@ SVG parser only support PNG image types
       - Add supporting error messages for the user when the ImageNotPNG error is thrown
         - “SVG Image must be derived from a PNG”
     - Add Unit Tests for generating TOML File and SVG File
-
+- Renode Simulator
+    - Added better integration of Renode within Iron Coder with the ability to launch a predetermined script for testing
+    - Added the option to open and close Renode
+    - Added separate threads to read Renode output
+    - Added another thread for state saving every 5 minutes
+# Iron Coder Work Done (Release Candidate)
+- Automate Generation of Boards
+  - Users no longer need to restart the application to use their new component
+  - Board generation windows are now displayed separately from the hardware editor to improve aesthetics and performance
+  - Users can now use PNG image files to create their boards, SVG files to create their boards, or select a default board image option
+    - Sub-system created to convert PNG file contents to SVG 
+  - For both PNG and SVG file inputs, systems were added to automatically resize the image to be compatible with the Iron Coder UI
+  - An improved interface for the Designate Pins window allows users to provide pin names for the TOML form and the board image simultaneously
+  - Bug fixes
+    - Fix bug where program crashed when attempt to read SVG files that had units included for the height and width fields 
+    - Removed unwrapped statements from Automate Generation of Boards subsystem and added a failure error screen for file I/O errors
+    - Stopped irrelevant fields, such as CPU, from preventing creation of peripheral and discrete devices
+    - Out of caution, store the SVG contents as a string after opening the provided file rather than storing the file path and continuously opening the file located on the user’s local filesystem
+- Simulator
+  - Iron Coder will not crash if the user doesn't have Renode, rather they are prompted to install it
+  - Added support for simultion use in terminal, can run code for STM32f4 discovery board.
+  - Simulation output and commands accepted in simulation tab.
+  - Script generation is made easier for the user to they can focus on testing
+    - Users should be able to just load in a generated script that allows them to select board, elf file, and logging settings depending on what they want to see.
+- Terminal
+  - Fixed issues with parsing colored text in terminal when running certain powershell extensions.
+  - Added multiple tabs to terminal pane for switching between output, terminal, and simulator.
+  - Added error handling if shell is not able to be opened on launch. 
+# Iron Coder Work Done (Production Release)
+- Installation packages for Windows and macOS
+  - Quickstart documentation posted on Iron Coder Forum
+- Documentation of all new features
+  - Making your First Project
+  - Example Code
+  - Automatic Generation of Boards
+  - Support for Flashing Arduino Boards
+  - Simulator
+  - Serial Monitor Debugger
+- Automatic Generation Boards Feature Testing
+  - Tested with non-team members 
+- Terminal
+  - Add support for macOS
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
@@ -100,7 +141,7 @@ parameters that are needed to describe the boards and work within the hardware e
   - Window stays open after loading example, need research into egui to figure out how to close after clicking example
   - Sometimes drawn wire connections will appear on top of the add board menu and other windows
   - More than one discrete component cannot be added to the hardware editor
-  - Rx pin in STM32 board example does not work properly so we can only output data
   - Tree command in windows OS causes crash, possibly due to string variable not being able to hold data from shell output
-  - When an SVG image element is very large, it will take up the entire designate pins window and some of the window elements are not accessible (instructions and cancel button)
+  - Renode does not automatically compile code done within the window so will require user to compile before starting the script
+  - For macOS, Renode needs to manually approved to run in System Settings since Renode's developer is not included in Apple's list of approved developers
 

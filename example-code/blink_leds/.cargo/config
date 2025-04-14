@@ -11,7 +11,7 @@
 
 [build]
 # Set the default target to match the Cortex-M0+ in the RP2040
-target = "thumbv6m-none-eabi"
+	
 
 # Target specific options
 [target.thumbv6m-none-eabi]
