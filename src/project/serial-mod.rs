@@ -1,5 +1,3 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-// hide console window on Windows in release
 extern crate core;
 extern crate csv;
 extern crate preferences;
@@ -12,22 +10,17 @@ use std::sync::{mpsc, Arc, RwLock};
 use std::time::Duration;
 use std::{env, thread};
 
-use crate::gui::{DataContainer, Packet};
-use crate::gui::{load_gui_settings, SerialMonitor, RIGHT_PANEL_WIDTH};
-use crate::gui::{save_to_csv, FileOptions};
+use crate::serial-monitor::{DataContainer, Packet};
+use crate::serial-monitor::{load_gui_settings, SerialMonitor, RIGHT_PANEL_WIDTH};
+use crate::serial-monitor::{save_to_csv, FileOptions};
 use crate::serial::{load_serial_settings, serial_thread, Device};
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
-use eframe::{egui, icon_data};
+use eframe::{egui};
 use preferences::AppInfo;
 
 mod gui;
-//mod io;
 mod serial;
 
-const APP_INFO: AppInfo = AppInfo {
-    name: "Serial Monitor",
-    author: "IronCoder Team"
-};
 const PREFERENCES_KEY: &str = "config/gui";
 const PREFERENCES_KEY_SERIAL: &str = "config/serial_devices";
 
@@ -143,8 +136,6 @@ fn main_thread(
 }
 
 fn show_serial_monitor() {
-    egui_logger::builder().init().unwrap();
-
     let gui_settings = load_gui_settings();
     let saved_serial_device_configs = load_serial_settings();
 
@@ -197,57 +188,27 @@ fn show_serial_monitor() {
             .expect("failed to send file");
     }
 
-    let options = eframe::NativeOptions {
-        viewport: ViewportBuilder::default()
-            .with_drag_and_drop(true)
-            .with_inner_size(vec2(gui_settings.x, gui_settings.y))
-            .with_min_inner_size(vec2(2.0 * RIGHT_PANEL_WIDTH, 2.0 * RIGHT_PANEL_WIDTH))
-            .with_icon(
-                icon_data::from_png_bytes(&include_bytes!("../icons/icon.png")[..]).unwrap(),
-            ),
-        ..Default::default()
-    };
-
     let gui_data_lock = data_lock;
     let gui_device_lock = device_lock;
     let gui_devices_lock = devices_lock;
     let gui_connected_lock = connected_lock;
 
-    if let Err(e) = eframe::run_native(
-        "Serial Monitor",
-        options,
-        Box::new(|ctx| {
-            let mut fonts = egui::FontDefinitions::default();
-            egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
-            ctx.egui_ctx.set_fonts(fonts);
-            ctx.egui_ctx.set_visuals(Visuals::dark());
-            //egui_extras::install_image_loaders(&ctx.egui_ctx);
-
-            let repaint_signal = ctx.egui_ctx.clone();
-            thread::spawn(move || loop {
-                if sync_rx.recv().is_ok() {
-                    repaint_signal.request_repaint();
-                }
-            });
-
-            Ok(Box::new(SerialMonitor::new(
-                ctx,
-                gui_data_lock,
-                gui_device_lock,
-                gui_devices_lock,
-                saved_serial_device_configs,
-                gui_connected_lock,
-                gui_settings,
-                save_tx,
-                load_tx,
-                loaded_names_rx,
-                send_tx,
-                clear_tx,
-            )))
-        }),
-    ) {
-        log::error!("{e:?}");
-    }
+    /*
+    SerialMonitor::new(
+        ctx,
+        gui_data_lock,
+        gui_device_lock,
+        gui_devices_lock,
+        saved_serial_device_configs,
+        gui_connected_lock,
+        gui_settings,
+        save_tx,
+        load_tx,
+        loaded_names_rx,
+        send_tx,
+        clear_tx,
+    )
+    */
 }
 
 fn main(){

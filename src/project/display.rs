@@ -25,7 +25,6 @@ use crate::board;
 use crate::project::Project;
 use crate::app::icons::IconSet;
 use crate::app::{Mode, Warnings, Git};
-// use crate::serial_monitor::show_serial_monitor;
 
 use enum_iterator;
 use rfd::FileDialog;
@@ -33,7 +32,6 @@ use serde::{Serialize, Deserialize};
 use crate::board::{Board, BoardTomlInfo};
 use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
-//use crate::serial_monitor::show;
 
 use std::process::{Command, Stdio, Child};
 
@@ -326,6 +324,9 @@ impl Project {
                 });
                 */
                 // show_serial_monitor();
+
+                // Use info_logger to write to output terminal
+                // self.info_logger(message)
 
                 let serial_app = Command::new("src/serial_monitor/serial-monitor.exe")
                     .output()

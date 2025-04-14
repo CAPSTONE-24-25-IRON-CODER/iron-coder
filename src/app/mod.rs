@@ -23,7 +23,6 @@ use std::time::Duration;
 // Separate modules
 use crate::board;
 use crate::project::Project;
-//use crate::serial-monitor;
 
 pub mod icons;
 use icons::{
