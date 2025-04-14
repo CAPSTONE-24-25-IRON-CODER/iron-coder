@@ -1,12 +1,17 @@
 name = "USART_Traffic_Lights"
-location = 'C:\Users\kille\Desktop\Repos\CapstoneIronCoder\example-code\traffic_light'
-persistant_buffer = ""
+location = "example-code/traffic_light"
+persistant_buffer = """
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+"""
 output_buffer = ""
 simulator_command_buffer = ""
-update_directory = true
-directory = ""
-current_view = "BoardsView"
-spawn_child = false
+update_directory = false
+directory = 'C:\Users\ethan\Documents\CEN3907\iron-coder [main-dev ð +7 ~4 -0 !]> '
+current_view = "FileTree"
+spawn_child = true
 renode_output = ""
 
 [system]

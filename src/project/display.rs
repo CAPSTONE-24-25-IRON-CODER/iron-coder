@@ -626,17 +626,16 @@ impl Project {
     // this function uses the current project path to build a path to the target elf file depending on the processor for the hardware
     fn load_elf_renode(&mut self)
     {
-        // get path information
-        let path = self.location.as_ref();
-        if(path.is_some())
+        // get name of built target
+        let name = self.get_package_name_from_toml(self.location.as_ref().unwrap());
+        if(name.is_some())
         {
-            println!("{}", path.unwrap().display().to_string());
             // build path
-            let mut start_of_path = path.unwrap().display().to_string();
-            let name = self.borrow_name();
-            // right now only building based on thumbv7em (which is cortex M4 ARM)
+            let mut start_of_path = self.get_location();
+            // // right now only building based on thumbv7em (which is cortex M4 ARM)
             start_of_path += "/target/thumbv7em-none-eabihf/debug/";
-            start_of_path += name;
+            start_of_path += name.unwrap().as_str();
+            // build command for loading elf file
             let mut command = String::from("sysbus LoadELF @");
             command += &start_of_path;
             self.send_command(&command);
@@ -667,7 +666,7 @@ impl Project {
     // Optional: Define a macro for resetting
     writeln!(script_file, "macro reset")?;
     writeln!(script_file, "\"\"\"")?;
-    writeln!(script_file, "sysbus LoadELF \"{}\"", elf_path.display())?;
+    writeln!(script_file, "sysbus LoadELF \"$CWD\\{}\"", elf_path.display())?;
     writeln!(script_file, "\"\"\"")?;
 
     // Execute the reset macro
@@ -912,16 +911,20 @@ impl Project {
                         return;
                     }
 
-                    self.build_and_create_script(ctx);
+                    // self.build_and_create_script(ctx);
 
-                    self.send_command("i $CWD\\src\\app\\simulator\\renode\\scripts\\generated/currentScript.resc");
+                    // self.send_command("i $CWD\\src\\app\\simulator\\renode\\scripts\\generated/currentScript.resc");
 
-                    self.start_auto_save();
+                    // self.start_auto_save();
 
                     // create machine
-                    //self.load_elf_renode();
+                    self.send_command("mach create");
+                    // load board file (only STM32F4 supported currently, so only board to be loaded)
+                    self.send_command("machine LoadPlatformDescription @src/app/simulator/renode/boards/custom_stm32f4.repl");
+                    // load the elf file for the project
+                    self.load_elf_renode();
                     // logging green LED blinking (this is ONLY for this board and program, user needs to set any other monitors thru sim pane)
-                    //self.send_command("logLevel -1 gpioPortG.GreenLED");
+                    // self.send_command("logLevel -1 gpioPortG.GreenLED");
                 }
             }
             // Open a window to add changes

@@ -380,6 +380,8 @@ impl IronCoderApp {
         } = self;
         if !*display_resource_window { return; }
 
+        // request the window updates after every second to keep data stream even if window is not focused
+        ctx.request_repaint_after(Duration::from_secs(1));
         self.system_info.refresh_all();
         let processes = self.system_info.processes();
         let iron_coder = processes.get_key_value(&self.iron_coder_pid).unwrap().1;
@@ -1051,6 +1053,7 @@ impl eframe::App for IronCoderApp {
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
         self.display_renode_missing_warning(ctx);
+        self.display_resource_monitor(ctx);
 
 
         let save_shortcut = KeyboardShortcut::new(Modifiers::CTRL, Key::S);
