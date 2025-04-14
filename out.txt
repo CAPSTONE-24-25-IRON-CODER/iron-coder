@@ -1,6 +1,6 @@
 Windows PowerShell
 Copyright (C) Microsoft Corporation. All rights reserved.
 
-Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+Try the new cross-platform PowerShell https://aka.ms/pscore6
 
-C:\Users\ethan\Documents\CEN3907\iron-coder [93m[[39m[96methan-dev[39m[96m ð[39m[31m +253[39m[31m ~354[39m[31m -61[39m[31m ![39m[93m][39m> 
+PS C:\Users\Eric T\Documents\IronCoder\iron-coder> 

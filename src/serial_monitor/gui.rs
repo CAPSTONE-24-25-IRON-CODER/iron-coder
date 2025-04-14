@@ -4,18 +4,19 @@ use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::fmt;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::error::Error;
+use csv::{WriterBuilder};
 
-use crate::serial_monitor::color_picker::{color_picker_widget, color_picker_window, COLORS};
-use crate::serial_monitor::data::{DataContainer, SerialDirection};
-use crate::serial_monitor::serial::{clear_serial_settings, save_serial_settings, Device, SerialDevices};
-use crate::serial_monitor::toggle::toggle;
-use crate::serial_monitor::FileOptions;
-use crate::serial_monitor::{APP_INFO, PREFERENCES_KEY};
+use crate::serial::{clear_serial_settings, save_serial_settings, Device, SerialDevices};
+use crate::{APP_INFO, PREFERENCES_KEY};
 use eframe::egui::panel::Side;
 use eframe::egui::{
-    Align2, CollapsingHeader, Color32, FontFamily, FontId, InnerResponse, KeyboardShortcut, Pos2, Sense, Ui, Vec2, Visuals,
+    Align2, CollapsingHeader, Color32, FontFamily, FontId, InnerResponse, Pos2, Sense, Ui, Vec2, Visuals,
+    vec2, Response, Stroke,
 };
+use eframe::epaint::StrokeKind;
 use eframe::{egui, Storage};
 use egui::ThemePreference;
 use egui_theme_switch::ThemeSwitch;
@@ -32,23 +33,12 @@ const BAUD_RATES: &[u32] = &[
     300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 116500, 230400, 128000, 460800,
     576000, 921600,
 ];
-const SAVE_FILE_SHORTCUT: KeyboardShortcut =
-    KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::S);
-
-// bitOr is not const, so we use plus
-const SAVE_PLOT_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(
-    egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
-    egui::Key::S,
-);
-
-const CLEAR_PLOT_SHORTCUT: KeyboardShortcut =
-    KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::X);
 
 #[derive(Clone)]
 pub enum FileDialogState {
-    Open,
+    //Open,
     Save,
-    SavePlot,
+    //SavePlot,
     None,
 }
 #[derive(PartialEq)]
@@ -81,7 +71,7 @@ impl Default for GuiSettingsContainer {
             y: 900.0,
             save_absolute_time: false,
             dark_mode: true,
-            theme_preference: ThemePreference::System,
+            theme_preference: ThemePreference::Dark,
         }
     }
 }
@@ -89,7 +79,6 @@ impl Default for GuiSettingsContainer {
 pub fn load_gui_settings() -> GuiSettingsContainer {
     GuiSettingsContainer::load(&APP_INFO, PREFERENCES_KEY).unwrap_or_else(|_| {
         let gui_settings = GuiSettingsContainer::default();
-        // save default settings
         if gui_settings.save(&APP_INFO, PREFERENCES_KEY).is_err() {
             log::error!("failed to save gui_settings");
         }
@@ -97,10 +86,148 @@ pub fn load_gui_settings() -> GuiSettingsContainer {
     })
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum SerialDirection {
+    Send,
+    Receive,
+}
+
+impl fmt::Display for SerialDirection {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SerialDirection::Send => write!(f, "SEND"),
+            SerialDirection::Receive => write!(f, "RECV"),
+        }
+    }
+}
+
+pub fn get_epoch_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+}
+
+#[derive(Clone, Debug)]
+pub struct Packet {
+    pub relative_time: f64,
+    pub absolute_time: f64,
+    pub direction: SerialDirection,
+    pub payload: String,
+}
+
+impl Default for Packet {
+    fn default() -> Packet {
+        Packet {
+            relative_time: 0.0,
+            absolute_time: get_epoch_ms() as f64,
+            direction: SerialDirection::Send,
+            payload: "".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DataContainer {
+    pub time: Vec<f64>,
+    pub absolute_time: Vec<f64>,
+    pub dataset: Vec<Vec<f32>>,
+    pub raw_traffic: Vec<Packet>,
+    pub loaded_from_file: bool,
+}
+
+impl Default for DataContainer {
+    fn default() -> DataContainer {
+        DataContainer {
+            time: vec![],
+            absolute_time: vec![],
+            dataset: vec![vec![]],
+            raw_traffic: vec![],
+            loaded_from_file: false,
+        }
+    }
+}
+
+/// A set of options for saving data to a CSV file.
+#[derive(Debug)]
+pub struct FileOptions {
+    pub file_path: PathBuf,
+    pub save_absolute_time: bool,
+    pub save_raw_traffic: bool,
+    pub names: Vec<String>,
+}
+
+pub fn save_to_csv(data: &DataContainer, csv_options: &FileOptions) -> Result<(), Box<dyn Error>> {
+    let mut wtr = WriterBuilder::new()
+        .has_headers(false)
+        .from_path(&csv_options.file_path)?;
+    let mut header = vec!["Time [ms]".to_string()];
+    header.extend_from_slice(&csv_options.names);
+    wtr.write_record(header)?;
+    for j in 0..data.dataset[0].len() {
+        let time = if csv_options.save_absolute_time {
+            data.absolute_time[j].to_string()
+        } else {
+            data.time[j].to_string()
+        };
+        let mut data_to_write = vec![time];
+        for value in data.dataset.iter() {
+            data_to_write.push(value[j].to_string());
+        }
+        wtr.write_record(&data_to_write)?;
+    }
+    wtr.flush()?;
+    if csv_options.save_raw_traffic {
+        let mut path = csv_options.file_path.clone();
+        let mut file_name = path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
+            .replace(".csv", "");
+        file_name += "raw.csv";
+        path.set_file_name(file_name);
+        save_raw(data, &path)?
+    }
+    Ok(())
+}
+
+pub fn save_raw(data: &DataContainer, path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    let mut wtr = WriterBuilder::new().has_headers(false).from_path(path)?;
+    let header = vec![
+        "Time [ms]".to_string(),
+        "Abs Time [ms]".to_string(),
+        "Raw Traffic".to_string(),
+    ];
+    wtr.write_record(header)?;
+
+    for j in 0..data.dataset[0].len() {
+        let mut data_to_write = vec![data.time[j].to_string(), data.absolute_time[j].to_string()];
+        data_to_write.push(data.raw_traffic[j].payload.clone());
+        wtr.write_record(&data_to_write)?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
 pub enum ColorWindow {
     NoShow,
     ColorIndex(usize),
 }
+
+pub const COLORS: [Color32; 10] = [
+    Color32::WHITE,                   // White
+    Color32::from_rgb(230, 159, 0),   // Orange
+    Color32::from_rgb(86, 180, 233),  // Blue
+    Color32::from_rgb(0, 158, 115),   // Turquoise
+    Color32::from_rgb(240, 228, 66),  // Yellow
+    Color32::from_rgb(0, 114, 178),   // Blue
+    Color32::from_rgb(213, 94, 0),    // Red-orange
+    Color32::from_rgb(204, 121, 167), // Purple
+    Color32::from_rgb(121, 94, 56),   // Brown
+    Color32::from_rgb(0, 204, 204),   // Cyan
+];
 
 pub struct SerialMonitor {
     connected_to_device: bool,
@@ -119,6 +246,7 @@ pub struct SerialMonitor {
     information_panel: InformationPanel,
     file_opened: bool,
     settings_window_open: bool,
+    connection_error_window_open: bool,
     gui_conf: GuiSettingsContainer,
     device_lock: Arc<RwLock<Device>>,
     devices_lock: Arc<RwLock<Vec<String>>>,
@@ -160,7 +288,6 @@ impl SerialMonitor {
         clear_tx: Sender<bool>,
     ) -> Self {
         let mut file_dialog = FileDialog::default()
-            //.initial_directory(PathBuf::from("/path/to/app"))
             .default_file_name("measurement.csv")
             .default_size([600.0, 400.0])
             .set_file_icon(
@@ -177,7 +304,6 @@ impl SerialMonitor {
                 "CSV files",
                 Arc::new(|p| p.extension().unwrap_or_default().to_ascii_lowercase() == "csv"),
             );
-        // Load the persistent data of the file dialog.
         if let Some(storage) = cc.storage {
             *file_dialog.storage_mut() =
                 eframe::get_value(storage, "file_dialog_storage").unwrap_or_default()
@@ -214,14 +340,14 @@ impl SerialMonitor {
             send_tx,
             clear_tx,
             plotting_range: usize::MAX,
-            plot_serial_display_ratio: 0.45,
+            plot_serial_display_ratio: 0.8,
             command: "".to_string(),
             show_sent_cmds: true,
             show_timestamps: true,
             save_raw: false,
             colors: vec![COLORS[0]],
             color_vals: vec![0.0],
-            labels: vec!["Column 0".to_string()],
+            labels: vec!["Dataset 1".to_string()],
             history: vec![],
             index: 0,
             plot_location: None,
@@ -231,6 +357,7 @@ impl SerialMonitor {
             show_color_window: ColorWindow::NoShow,
             file_opened: false,
             settings_window_open: false,
+            connection_error_window_open: false,
         }
     }
 
@@ -247,8 +374,6 @@ impl SerialMonitor {
                     ui.label("Changing devices will clear all data.");
                     ui.label("How do you want to proceed?");
                     ui.add_space(20.0);
-                    ui.checkbox(&mut self.do_not_show_clear_warning, "Remember my decision.");
-                    ui.add_space(20.0);
                     ui.horizontal(|ui| {
                         ui.add_space(130.0);
                         if ui.button("Continue & Clear").clicked() {
@@ -262,6 +387,127 @@ impl SerialMonitor {
                 });
             });
         window_feedback
+    }
+
+    pub fn color_picker_widget(
+        ui: &mut Ui,
+        label: &str,
+        color: &mut [Color32],
+        index: usize,
+    ) -> Response {
+        ui.horizontal(|ui| {
+            let square_size = ui.spacing().interact_size.y * 0.8;
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(square_size, square_size), Sense::click());
+            let stroke = if response.hovered() {
+                Stroke::new(2.0, Color32::WHITE)
+            } else {
+                Stroke::NONE
+            };
+    
+            ui.painter()
+                .rect(rect, 2.0, color[index], stroke, StrokeKind::Middle);
+            ui.label(label);
+            response
+        })
+        .inner
+    }
+    pub fn color_picker_window(ctx: &egui::Context, color: &mut Color32, value: &mut f32) -> bool {
+        let mut save_button = false;
+    
+        let _window_response = egui::Window::new("Color Menu")
+            .fixed_size(Vec2 { x: 100.0, y: 100.0 })
+            .anchor(Align2::CENTER_CENTER, Vec2 { x: 0.0, y: 0.0 })
+            .collapsible(false)
+            .show(ctx, |ui| {
+                // Show five color options in each row
+                let square_size = ui.spacing().interact_size.y * 0.8;
+    
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        for color_option in &COLORS[0..5] {
+                            let (rect, response) = ui.allocate_exact_size(
+                                egui::vec2(square_size, square_size),
+                                Sense::click(),
+                            );
+    
+                            if response.clicked() {
+                                *color = *color_option;
+                            }
+    
+                            let stroke = if response.hovered() {
+                                Stroke::new(2.0, Color32::WHITE)
+                            } else {
+                                Stroke::NONE
+                            };
+    
+                            ui.painter()
+                                .rect(rect, 2.0, *color_option, stroke, StrokeKind::Middle);
+                        }
+                    });
+    
+                    ui.horizontal(|ui| {
+                        for color_option in &COLORS[5..10] {
+                            let (rect, response) = ui.allocate_exact_size(
+                                egui::vec2(square_size, square_size),
+                                Sense::click(),
+                            );
+    
+                            if response.clicked() {
+                                *color = *color_option;
+                            }
+    
+                            let stroke = if response.hovered() {
+                                Stroke::new(2.0, Color32::WHITE)
+                            } else {
+                                Stroke::NONE
+                            };
+    
+                            ui.painter()
+                                .rect(rect, 2.0, *color_option, stroke, StrokeKind::Middle);
+                        }
+                    });
+    
+                    ui.add_space(25.0);
+                    ui.centered_and_justified(|ui| {
+                        if ui.button("Exit").clicked() {
+                            save_button = true;
+                        }
+                    });
+                });
+            });
+    
+        save_button
+    }
+
+    fn show_connection_error(
+        ctx: &egui::Context,
+        connection_error_window_open: &mut bool,
+    ) -> Option<InnerResponse<Option<()>>> {
+        egui::Window::new("Connection error!")
+            .fixed_pos(Pos2 { x: 800.0, y: 450.0 })
+            .fixed_size(Vec2 { x: 400.0, y: 200.0 })
+            .anchor(Align2::CENTER_CENTER, Vec2 { x: 0.0, y: 0.0 })
+            .collapsible(false)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(20.0);
+                    ui.label("No device selected.");
+                    ui.label("Please select a device for connection.");
+                    ui.add_space(20.0);
+                    ui.add_space(5.0);
+                    ui.add_space(5.0);
+                    ui.horizontal(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.add_space(190.0);
+                            if ui.button("Exit").clicked() {
+                                *connection_error_window_open = false;
+                            }
+                        });
+                    });
+                    ui.add_space(5.0);
+                });
+            })
     }
 
     fn show_settings_window(
@@ -300,31 +546,10 @@ impl SerialMonitor {
             })
     }
 
-    fn console_text(&self, packet: &crate::serial_monitor::data::Packet) -> Option<String> {
-        match (self.show_sent_cmds, self.show_timestamps, &packet.direction) {
-            (true, true, _) => Some(format!(
-                "[{}] t + {:.3}s: {}\n",
-                packet.direction,
-                packet.relative_time as f32 / 1000.0,
-                packet.payload
-            )),
-            (true, false, _) => Some(format!("[{}]: {}\n", packet.direction, packet.payload)),
-            (false, true, SerialDirection::Receive) => Some(format!(
-                "t + {:.3}s: {}\n",
-                packet.relative_time as f32 / 1000.0,
-                packet.payload
-            )),
-            (false, false, SerialDirection::Receive) => Some(packet.payload.clone() + "\n"),
-            (_, _, _) => None,
-        }
-    }
-
     fn draw_central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             let left_border = 10.0;
-            // Width
             let width = ui.available_size().x - 2.0 * left_border - RIGHT_PANEL_WIDTH;
-            // Height
             let top_spacing = 5.0;
             let panel_height = ui.available_size().y;
             let mut plot_height: f32 = 0.0;
@@ -332,7 +557,6 @@ impl SerialMonitor {
             if self.serial_devices.number_of_plots[self.device_idx] > 0 {
                 let height = ui.available_size().y * self.plot_serial_display_ratio;
                 plot_height = height;
-                // need to subtract 12.0, this seems to be the height of the separator of two adjacent plots
                 plot_height = plot_height
                     / (self.serial_devices.number_of_plots[self.device_idx] as f32)
                     - 12.0;
@@ -361,8 +585,8 @@ impl SerialMonitor {
                     }
                     if self.serial_devices.number_of_plots[self.device_idx] > 0 {
                         if self.data.dataset.len() != self.labels.len() && !self.file_opened {
-                            self.labels = (0..max(self.data.dataset.len(), 1))
-                                .map(|i| format!("Column {i}"))
+                            self.labels = (1..max(self.data.dataset.len(), 1))
+                                .map(|i| format!("Dataset {i}"))
                                 .collect();
                             self.colors = (0..max(self.data.dataset.len(), 1))
                                 .map(|i| COLORS[i % COLORS.len()])
@@ -372,6 +596,7 @@ impl SerialMonitor {
                         }
 
                         let mut graphs: Vec<Vec<PlotPoint>> = vec![vec![]; self.data.dataset.len()];
+
                         let window = self.data.dataset[0]
                             .len()
                             .saturating_sub(self.plotting_range);
@@ -401,14 +626,26 @@ impl SerialMonitor {
                                 let signal_plot = Plot::new(format!("data-{graph_idx}"))
                                     .height(plot_height)
                                     .width(width)
-                                    .legend(Legend::default())
-                                    .x_grid_spacer(log_grid_spacer(10))
-                                    .y_grid_spacer(log_grid_spacer(10))
-                                    .x_axis_formatter(t_fmt);
+                                    .legend(Legend::default());
+                                    //.x_grid_spacer(log_grid_spacer(10))
+                                    //.y_grid_spacer(log_grid_spacer(10));
+                                    //.x_axis_formatter(t_fmt);
 
                                 let plot_inner = signal_plot.show(ui, |signal_plot_ui| {
+                                    let data_points: egui_plot::PlotPoints = [0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1]
+                                        .into_iter()
+                                        .enumerate()
+                                        .map(|(i, value)| [i as f64, value as f64])
+                                        .collect();
+                                    if (self.connected_to_device){
+                                        signal_plot_ui.line(
+                                            Line::new(data_points)
+                                                .name(&self.labels[0])
+                                                .color(self.colors[0]),
+                                        );
+                                    }
+                                    /*
                                     for (i, graph) in graphs.iter().enumerate() {
-                                        // this check needs to be here for when we change devices (not very elegant)
                                         if i < self.labels.len() {
                                             signal_plot_ui.line(
                                                 Line::new(PlotPoints::Owned(graph.to_vec()))
@@ -417,6 +654,7 @@ impl SerialMonitor {
                                             );
                                         }
                                     }
+                                    */
                                 });
 
                                 self.plot_location = Some(plot_inner.response.rect);
@@ -433,7 +671,7 @@ impl SerialMonitor {
                             let resize_y = separator.drag_delta().y;
 
                             if separator.double_clicked() {
-                                self.plot_serial_display_ratio = 0.45;
+                                self.plot_serial_display_ratio = 0.8;
                             }
                             self.plot_serial_display_ratio = (self.plot_serial_display_ratio
                                 + resize_y / panel_height)
@@ -460,48 +698,6 @@ impl SerialMonitor {
 
                     let mut text_edit_size = ui.available_size();
                     text_edit_size.x = width;
-                    egui::ScrollArea::vertical()
-                        .id_salt("serial_output")
-                        .auto_shrink([false; 2])
-                        .stick_to_bottom(true)
-                        .enable_scrolling(true)
-                        .max_height(serial_height - top_spacing)
-                        .min_scrolled_height(serial_height - top_spacing)
-                        .max_width(width)
-                        .show_rows(ui, row_height, num_rows, |ui, row_range| {
-                            let content: String = row_range
-                                .into_iter()
-                                .flat_map(|i| {
-                                    if self.data.raw_traffic.is_empty() {
-                                        None
-                                    } else {
-                                        self.console_text(&self.data.raw_traffic[i])
-                                    }
-                                })
-                                .collect();
-
-                            ui.add(
-                                egui::TextEdit::multiline(&mut content.as_str())
-                                    .font(DEFAULT_FONT_ID) // for cursor height
-                                    .lock_focus(true)
-                                    .text_color(color)
-                                    .desired_width(width)
-                                    //.layouter(&mut layouter),
-                            );
-                        });
-
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                        self.index = self.index.saturating_sub(1);
-                        if !self.history.is_empty() {
-                            self.command = self.history[self.index].clone();
-                        }
-                    }
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                        self.index = std::cmp::min(self.index + 1, self.history.len() - 1);
-                        if !self.history.is_empty() {
-                            self.command = self.history[self.index].clone();
-                        }
-                    }
                 });
                 ui.add_space(left_border);
             });
@@ -551,18 +747,14 @@ impl SerialMonitor {
                     .show_ui(ui, |ui| {
                         devices
                             .into_iter()
-                            // on macOS each device appears as /dev/tty.* and /dev/cu.*
-                            // we only display the /dev/tty.* here
                             .filter(|dev| !dev.contains("/dev/cu."))
                             .for_each(|dev| {
-                                // this makes the names shorter in the UI on UNIX and UNIX-like platforms
                                 let dev_text = dev.replace("/dev/tty.", "");
                                 ui.selectable_value(&mut self.device, dev, dev_text);
                             });
                     })
                     .response;
-                // let selected_new_device = response.changed();  //somehow this does not work
-                // if selected_new_device {
+
                 if old_name != self.device {
                     if !self.data.time.is_empty() {
                         self.show_warning_window = WindowFeedback::Waiting;
@@ -578,11 +770,9 @@ impl SerialMonitor {
                     self.show_warning_window = self.clear_warning_window(ctx);
                 }
                 WindowFeedback::Clear => {
-                    // new device selected, check in previously used devices
                     let mut device_is_already_saved = false;
                     for (idx, dev) in self.serial_devices.devices.iter().enumerate() {
                         if dev.name == self.device {
-                            // this is the device!
                             self.device = dev.name.clone();
                             self.device_idx = idx;
                             self.init = true;
@@ -590,21 +780,19 @@ impl SerialMonitor {
                         }
                     }
                     if !device_is_already_saved {
-                        // create new device in the archive
                         let mut device = Device::default();
                         device.name = self.device.clone();
                         self.serial_devices.devices.push(device);
                         self.serial_devices.number_of_plots.push(1);
                         self.serial_devices
                             .labels
-                            .push(vec!["Column 0".to_string()]);
+                            .push(vec!["Dataset 1".to_string()]);
                         self.device_idx = self.serial_devices.devices.len() - 1;
                         save_serial_settings(&self.serial_devices);
                     }
                     self.clear_tx
                         .send(true)
                         .expect("failed to send clear after choosing new device");
-                    // need to clear the data here such that we don't get errors in the gui (plot)
                     self.data = DataContainer::default();
                     self.show_warning_window = WindowFeedback::None;
                 }
@@ -645,8 +833,17 @@ impl SerialMonitor {
                         device.baud_rate = self.serial_devices.devices[self.device_idx].baud_rate;
                     }
                 }
+                if self.device.as_str() == "" {
+                    self.connection_error_window_open = true;
+                }
             }
         });
+        if self.connection_error_window_open {
+            Self::show_connection_error(
+                ui.ctx(),
+                &mut self.connection_error_window_open,
+            );
+        }
         ui.add_space(5.0);
         ui.horizontal(|ui| {
             ui.label("Data Bits");
@@ -793,29 +990,6 @@ impl SerialMonitor {
             if self.connected_to_device {
                 ui.disable();
             }
-            if ui
-                .button(egui::RichText::new(format!(
-                    "{} Open file",
-                    egui_phosphor::regular::FOLDER_OPEN
-                )))
-                .on_hover_text("Load data from .csv")
-                .clicked()
-            {
-                self.file_dialog_state = FileDialogState::Open;
-                self.file_dialog.pick_file();
-            }
-            if self.file_opened
-                && ui
-                    .button(egui::RichText::new(
-                        egui_phosphor::regular::X_SQUARE.to_string(),
-                    ))
-                    .on_hover_text("Close file.")
-                    .clicked()
-            {
-                self.file_opened = false;
-                let _ = self.load_tx.send(PathBuf::new());
-                self.file_dialog_state = FileDialogState::None;
-            }
         });
     }
     fn draw_export_settings(&mut self, _ctx: &egui::Context, ui: &mut Ui) {
@@ -831,33 +1005,10 @@ impl SerialMonitor {
                     )))
                     .on_hover_text("Save Plot Data to CSV.")
                     .clicked()
-                    || ui.input_mut(|i| i.consume_shortcut(&SAVE_FILE_SHORTCUT))
                 {
                     self.file_dialog_state = FileDialogState::Save;
                     self.file_dialog.save_file();
                 }
-
-                if ui
-                    .button(egui::RichText::new(format!(
-                        "{} Save Plot",
-                        egui_phosphor::regular::FLOPPY_DISK
-                    )))
-                    .on_hover_text("Save an image of the Plot.")
-                    .clicked()
-                    || ui.input_mut(|i| i.consume_shortcut(&SAVE_PLOT_SHORTCUT))
-                {
-                    self.file_dialog_state = FileDialogState::SavePlot;
-                    self.file_dialog.save_file();
-                }
-                ui.end_row();
-                ui.label("Save Raw Traffic");
-                ui.add(toggle(&mut self.save_raw))
-                    .on_hover_text("Save second CSV containing raw traffic.")
-                    .changed();
-                ui.end_row();
-                ui.label("Save Absolute Time");
-                ui.add(toggle(&mut self.gui_conf.save_absolute_time))
-                    .on_hover_text("Save absolute time in CSV.");
                 ui.end_row();
             });
     }
@@ -866,7 +1017,7 @@ impl SerialMonitor {
         ui.add_space(20.0);
 
         if ui
-            .button(format!("{} Settings", egui_phosphor::regular::GEAR_FINE))
+            .button(format!("{} Display Settings", egui_phosphor::regular::GEAR_FINE))
             .clicked()
         {
             self.settings_window_open = true;
@@ -888,15 +1039,12 @@ impl SerialMonitor {
             )))
             .on_hover_text("Clear Data from Plot.")
             .clicked()
-            || ui.input_mut(|i| i.consume_shortcut(&CLEAR_PLOT_SHORTCUT))
         {
             log::info!("Cleared recorded Data");
             if let Err(err) = self.clear_tx.send(true) {
                 log::error!("clear_tx thread send failed: {:?}", err);
             }
-            // need to clear the data here in order to prevent errors in the gui (plot)
             self.data = DataContainer::default();
-            // self.names_tx.send(self.serial_devices.labels[self.device_idx].clone()).expect("Failed to send names");
         }
         ui.add_space(5.0);
         ui.horizontal(|ui| {
@@ -907,92 +1055,20 @@ impl SerialMonitor {
                 clear_serial_settings();
             }
             if ui.button("Reset Fields").clicked() {
-                // self.serial_devices.labels[self.device_idx] = self.serial_devices.labels.clone();
+                // TODO: put default values back
             }
         });
     }
 
     fn draw_plot_settings(&mut self, ui: &mut Ui) {
-        egui::Grid::new("plot_settings")
-            .num_columns(2)
-            .spacing(Vec2 { x: 10.0, y: 10.0 })
-            .striped(true)
-            .show(ui, |ui| {
-                ui.label("Plotting range [#]: ");
-
-                let window_fmt = |val: f64, _range: RangeInclusive<usize>| {
-                    if val != usize::MAX as f64 {
-                        val.to_string()
-                    } else {
-                        "∞".to_string()
-                    }
-                };
-
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::DragValue::new(&mut self.plotting_range).custom_formatter(window_fmt),
-                    )
-                    .on_hover_text(
-                        "Select a window of the last datapoints to be displayed in the plot.",
-                    );
-                    if ui
-                        .button("Full Dataset")
-                        .on_hover_text("Show the full dataset.")
-                        .clicked()
-                    {
-                        self.plotting_range = usize::MAX;
-                    }
-                });
-                ui.end_row();
-                ui.label("Number of plots [#]: ");
-
-                ui.horizontal(|ui| {
-                    if ui
-                        .button(egui::RichText::new(
-                            egui_phosphor::regular::ARROW_FAT_LEFT.to_string(),
-                        ))
-                        .clicked()
-                    {
-                        if self.serial_devices.number_of_plots[self.device_idx] == 0 {
-                            return;
-                        }
-                        self.serial_devices.number_of_plots[self.device_idx] =
-                            (self.serial_devices.number_of_plots[self.device_idx] - 1).clamp(0, 10);
-                    }
-                    ui.add(
-                        egui::DragValue::new(
-                            &mut self.serial_devices.number_of_plots[self.device_idx],
-                        )
-                        .range(0..=10),
-                    )
-                    .on_hover_text("Select the number of plots to be shown.");
-                    if ui
-                        .button(egui::RichText::new(
-                            egui_phosphor::regular::ARROW_FAT_RIGHT.to_string(),
-                        ))
-                        .clicked()
-                    {
-                        if self.serial_devices.number_of_plots[self.device_idx] == 10 {
-                            return;
-                        }
-                        self.serial_devices.number_of_plots[self.device_idx] =
-                            (self.serial_devices.number_of_plots[self.device_idx] + 1).clamp(0, 10);
-                    }
-                });
-                ui.end_row();
-            });
-        ui.add_space(25.0);
-
         if self.labels.len() == 1 {
-            ui.label("Detected 1 Dataset:");
+            ui.label("Dataset:");
         } else {
             ui.label(format!("Detected {} Datasets:", self.labels.len()));
         }
         ui.add_space(5.0);
         for i in 0..self.labels.len().min(10) {
-            // if init, set names to what has been stored in the device last time
             if self.init {
-                // self.names_tx.send(self.labels.clone()).expect("Failed to send names");
                 self.init = false;
             }
 
@@ -1000,29 +1076,24 @@ impl SerialMonitor {
                 break;
             }
             ui.horizontal(|ui| {
-                let response = color_picker_widget(ui, "", &mut self.colors, i);
+                let response = Self::color_picker_widget(ui, "", &mut self.colors, i);
 
-                // Check if the square was clicked and toggle color picker window
                 if response.clicked() {
                     self.show_color_window = ColorWindow::ColorIndex(i);
                 };
 
-                if ui
-                    .add(
+                ui.add(
                         egui::TextEdit::singleline(&mut self.labels[i])
                             .desired_width(0.95 * RIGHT_PANEL_WIDTH),
                     )
                     .on_hover_text("Use custom names for your Datasets.")
                     .changed()
-                {
-                    // self.names_tx.send(self.labels.clone()).expect("Failed to send names");
-                };
             });
         }
         match self.show_color_window {
             ColorWindow::NoShow => {}
             ColorWindow::ColorIndex(index) => {
-                if color_picker_window(
+                if Self::color_picker_window(
                     ui.ctx(),
                     &mut self.colors[index],
                     &mut self.color_vals[index],
@@ -1031,10 +1102,6 @@ impl SerialMonitor {
                 }
             }
         }
-
-        if self.labels.len() > 10 {
-            ui.label("Only renaming up to 10 Datasets is currently supported.");
-        }
     }
 
     fn draw_side_panel(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -1042,7 +1109,6 @@ impl SerialMonitor {
             .min_width(RIGHT_PANEL_WIDTH)
             .max_width(RIGHT_PANEL_WIDTH)
             .resizable(false)
-            //.default_width(right_panel_width)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.add_enabled_ui(true, |ui| {
@@ -1069,33 +1135,6 @@ impl SerialMonitor {
                     });
 
                     match self.file_dialog_state {
-                        FileDialogState::Open => {
-                            if let Some(path) = self
-                                .file_dialog
-                                .update_with_right_panel_ui(ctx, &mut |ui, dia| {
-                                    self.information_panel.ui(ui, dia);
-                                })
-                                .picked()
-                            {
-                                self.picked_path = path.to_path_buf();
-                                self.file_opened = true;
-                                self.file_dialog_state = FileDialogState::None;
-                                if let Err(e) = self.load_tx.send(self.picked_path.clone()) {
-                                    log::error!("load_tx thread send failed: {:?}", e);
-                                }
-                            }
-                        }
-                        FileDialogState::SavePlot => {
-                            if let Some(path) = self.file_dialog.update(ctx).picked() {
-                                self.picked_path = path.to_path_buf();
-                                self.file_dialog_state = FileDialogState::None;
-                                self.picked_path.set_extension("png");
-
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
-                                    Default::default(),
-                                ));
-                            }
-                        }
                         FileDialogState::Save => {
                             if let Some(path) = self.file_dialog.update(ctx).picked() {
                                 self.picked_path = path.to_path_buf();
@@ -1146,34 +1185,6 @@ impl eframe::App for SerialMonitor {
 
         self.gui_conf.x = ctx.used_size().x;
         self.gui_conf.y = ctx.used_size().y;
-
-        // Check for returned screenshot:
-        let screenshot = ctx.input(|i| {
-            for event in &i.raw.events {
-                if let egui::Event::Screenshot { image, .. } = event {
-                    return Some(image.clone());
-                }
-            }
-            None
-        });
-
-        if let (Some(screenshot), Some(plot_location)) = (screenshot, self.plot_location) {
-            // for a full size application, we should put this in a different thread,
-            // so that the GUI doesn't lag during saving
-
-            let pixels_per_point = ctx.pixels_per_point();
-            let plot = screenshot.region(&plot_location, Some(pixels_per_point));
-            // save the plot to png
-            image::save_buffer(
-                &self.picked_path,
-                plot.as_raw(),
-                plot.width() as u32,
-                plot.height() as u32,
-                image::ColorType::Rgba8,
-            )
-            .unwrap();
-            log::info!("Image saved to {:?}.", self.picked_path);
-        }
     }
 
     fn save(&mut self, _storage: &mut dyn Storage) {
