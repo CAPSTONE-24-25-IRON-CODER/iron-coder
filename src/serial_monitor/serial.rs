@@ -7,9 +7,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
-use crate::serial_monitor::color_picker::COLORS;
-use crate::serial_monitor::data::{get_epoch_ms, SerialDirection};
-use crate::serial_monitor::{Packet, APP_INFO, PREFERENCES_KEY_SERIAL};
+use crate::gui::COLORS;
+use crate::data::{get_epoch_ms, SerialDirection};
+use crate::{Packet, APP_INFO, PREFERENCES_KEY_SERIAL};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerialDevices {
@@ -24,7 +24,7 @@ impl Default for SerialDevices {
     fn default() -> Self {
         SerialDevices {
             devices: vec![Device::default()],
-            labels: vec![vec!["Column 0".to_string()]],
+            labels: vec![vec!["Dataset 1".to_string()]],
             colors: vec![vec![COLORS[0]]],
             color_vals: vec![vec![0.0]],
             number_of_plots: vec![1],
@@ -35,7 +35,6 @@ impl Default for SerialDevices {
 pub fn load_serial_settings() -> SerialDevices {
     SerialDevices::load(&APP_INFO, PREFERENCES_KEY_SERIAL).unwrap_or_else(|_| {
         let serial_configs = SerialDevices::default();
-        // save default settings
         save_serial_settings(&serial_configs);
         serial_configs
     })
@@ -110,13 +109,6 @@ pub fn serial_thread(
     let mut last_connected_device = Device::default();
 
     loop {
-        let _not_awake = keepawake::Builder::default()
-            .display(false)
-            .reason("Serial Connection")
-            .app_name("Serial Monitor")
-            //.app_reverse_domain("io.github.myprog")
-            .create();
-
         if let Ok(mut connected) = connected_lock.write() {
             *connected = false;
         }
@@ -139,7 +131,7 @@ pub fn serial_thread(
                 );
 
                 log::info!(
-                    "Hello from the beta build"
+                    "0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1"
                 );
 
                 BufReader::new(p)
@@ -155,13 +147,6 @@ pub fn serial_thread(
 
         let t_zero = Instant::now();
 
-        let _awake = keepawake::Builder::default()
-            .display(true)
-            .reason("Serial Connection")
-            .app_name("Serial Monitor")
-            //.app_reverse_domain("io.github.myprog")
-            .create();
-
         'connected_loop: loop {
             let devices = available_devices();
             if let Ok(mut write_guard) = devices_lock.write() {
@@ -174,10 +159,6 @@ pub fn serial_thread(
 
             perform_writes(&mut port, &send_rx, &raw_data_tx, t_zero);
             perform_reads(&mut port, &raw_data_tx, t_zero);
-
-            //write!("Hello from the beta build");
-
-            //std::thread::sleep(Duration::from_millis(10));
         }
         std::mem::drop(port);
     }
@@ -202,7 +183,7 @@ fn get_device(
             *write_guard = devices.clone();
         }
 
-        // do reconnect
+        //Reconnect to the last connected device
         if devices.contains(&last_connected_device.name) {
             if let Ok(mut device) = device_lock.write() {
                 device.name = last_connected_device.name.clone();
@@ -226,7 +207,7 @@ fn disconnected(
     device_lock: &Arc<RwLock<Device>>,
     last_connected_device: &mut Device,
 ) -> bool {
-    // disconnection by button press
+    // Handle disconnection with button press
     if let Ok(read_guard) = device_lock.read() {
         if device.name != read_guard.name {
             *last_connected_device = Device::default();
@@ -235,7 +216,7 @@ fn disconnected(
         }
     }
 
-    // other types of disconnection (e.g. unplugging, power down)
+    // Handle other disconnects
     if !devices.contains(&device.name) {
         if let Ok(mut write_guard) = device_lock.write() {
             write_guard.name.clear();
@@ -290,7 +271,6 @@ fn perform_reads(
                 raw_data_tx.send(packet).expect("failed to send raw data");
             });
         }
-        // Timeout is ok, just means there is no data to read
         Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {}
         Err(e) => {
             log::error!("Error reading: {:?}", e);
