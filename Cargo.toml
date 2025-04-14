@@ -40,6 +40,8 @@ savefile-derive = "0.17.4"
 k_board = "1.2.2"
 git2 = "0.19.0"
 serialport = { version = "4.7", features = ["serde"] }
+preferences = { version = "2.0.0" }
+egui_plot = "0.27.2"
 
 [profile.release]
 opt-level = 'z'

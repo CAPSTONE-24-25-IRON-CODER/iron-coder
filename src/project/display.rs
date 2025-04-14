@@ -35,8 +35,6 @@ use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
 //use crate::serial_monitor::show;
 
-use std::process::Command;
-
 use std::process::{Command, Stdio, Child};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
