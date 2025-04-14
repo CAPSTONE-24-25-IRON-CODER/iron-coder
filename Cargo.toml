@@ -45,6 +45,7 @@ webbrowser = "1.0.4"
 encoding_rs = "=0.8.35"
 encoding_rs_io = "0.1.7"
 strip-ansi-escapes = "0.2.1"
+sysinfo = "0.29"
 
 [profile.release]
 opt-level = 'z'

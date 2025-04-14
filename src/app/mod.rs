@@ -9,7 +9,7 @@ use log::{error, warn, info};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use clap::Parser;
-use egui::{Vec2, RichText, Label, Color32, Key, Modifiers, KeyboardShortcut, Ui};
+use egui::{Color32, Key, KeyboardShortcut, Label, Modifiers, RichText, Ui, Vec2, Window};
 use::egui_extras::install_image_loaders;
 use fs_extra::dir::DirEntryAttr::Modified;
 use toml::macros::insert_toml;
@@ -18,6 +18,8 @@ use std::io::{Write, Read, BufRead, BufReader};
 use std::thread;
 use std::time::Duration;
 use webbrowser;
+
+use sysinfo::{Component, Disk, Networks, Pid, PidExt, ProcessExt, System, SystemExt};
 
 // use egui_modal::Modal;
 
@@ -101,6 +103,11 @@ pub struct IronCoderApp {
     display_settings: bool,
     display_boards_window: bool,
     display_example_code: bool,
+    display_resource_window: bool,
+    #[serde(skip)]
+    iron_coder_pid: Pid,
+    #[serde(skip)]
+    system_info: sysinfo::System,
     // #[serde(skip)]
     // modal: Option<Modal>,
     mode: Mode,
@@ -135,6 +142,9 @@ impl Default for IronCoderApp {
             display_settings: false,
             display_boards_window: false,
             display_example_code: false,
+            display_resource_window: false,
+            iron_coder_pid: 0.into(),
+            system_info: sysinfo::System::new_all(),
             // modal: None,
             mode: Mode::EditProject,
             boards: boards,
@@ -197,196 +207,21 @@ impl IronCoderApp {
 
         app.project.spawn_child = false;
         app.project.update_directory = true;
-        return app;
-    }
 
-    pub fn open_simulator(&mut self) {
-        self.simulator_open = true; 
-        info!("Simulator window state set to open.");
-    }
-
-
-    // stop works fine
-    fn stop_renode(&mut self) {
-        if let Some(mut child) = self.renode_process.take() {
-            if let Err(e) = child.kill() {
-                println!("Failed to stop Renode: {}", e);
-            } else {
-                println!("Renode stopped.");
-            }
-        } else {
-            println!("No Renode instance running.");
-        }
-    }
-
-    // start, you do not need the threads to run the commands
-    // more important line was the .arg("--console") to allow commands to be passed in
-    pub fn start_renode(&mut self) {
-        if self.renode_process.is_some() {
-            println!("Renode is already running.");
-            return;
-        }
-        
-        // we need to add a check to see if renode is intalled
-        let check_command = if cfg!(target_os = "windows") { "where" } else { "which" };
-
-        let renode_exists = Command::new(check_command)
-            .arg("renode")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false);
-    
-        if !renode_exists {
-            println!("Error: Renode is not installed or not found in PATH.");
-            self.warning_flags.display_renode_missing_warning = true;
-            return;
-        }
-
-        let mut child: Child = match Command::new("renode")
-            //.arg("--disable-xwt")
-            .arg("--console")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+        // find iron coder pid
+        // system information
+        let mut sys = System::new_all();
+        sys.refresh_all();
+        // find iron coder process
+        let processes = sys.processes();
+        for process in processes 
+        {
+            if(process.1.name() == "iron_coder.exe")
             {
-                Ok(child) => child,
-                Err(e) => {
-                println!("Failed to start Renode: {}", e);
-                return;
-                }
-            };
-
-        println!("Renode started!");
-
-        // Here we are taking the the stdin of the child process and storing it in the IronCoderApp struct
-        // This will allow us to send commands in other functions by locking the stdin and writing to it
-        let stdin = child.stdin.take().expect("Failed to get stdin of Renode process");
-        self.stdin = Some(Arc::new(Mutex::new(stdin)));
-    
-        let output_ref = Arc::clone(&self.renode_output);
-        let stdout = child.stdout.take().expect("Failed to take stdout");
-        thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                match line {
-                    Ok(output) => {
-                        println!("Renode stdout: {}", output);
-                        let mut log = output_ref.lock().expect("Failed to lock output");
-                        log.push_str(&format!("{}\n", output));
-                    }
-                    Err(e) => println!("Failed to read Renode stdout: {}", e),
-                }
+                app.iron_coder_pid = *process.0;
             }
-        });
-    
-        let output_ref = Arc::clone(&self.renode_output);
-        let stderr = child.stderr.take().expect("Failed to take stderr");
-        thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                match line {
-                    Ok(output) => {
-                        println!("Renode stderr: {}", output);
-                        let mut log = output_ref.lock().expect("Failed to lock output");
-                        log.push_str(&format!("{}\n", output));
-                    }
-                    Err(e) => println!("Failed to read Renode stderr: {}", e),
-                }
-            }
-        });
-    
-
-        self.renode_process = Some(child);
-        self.start_auto_save();
-    }
-
-    fn start_auto_save(&self) {
-        let stdin = self.stdin.as_ref().expect("Renode not running").clone();
-
-        thread::spawn(move || {
-            loop {
-                thread::sleep(Duration::from_secs(300));
-                let mut stdin = stdin.lock().expect("Failed to lock stdin");
-                if let Err(e) = writeln!(stdin, "i $CWD/src/app/simulator/renode/scripts/saveState.resc") {
-                    println!("Failed to send command to Renode: {}", e);
-                } else {
-                    println!("AutoSave command sent.");
-                }
-            }
-        });
-    }
-
-    // the send command was updated to obtain the lock for the stdin to be able to send in commands to Renode
-    fn send_command(&mut self, command: &str) {
-        if let Some(stdin) = &self.stdin {
-            let mut stdin = stdin.lock().expect("Failed to lock stdin");
-            if let Err(e) = writeln!(stdin, "{}", command) {
-                println!("Failed to send command to Renode: {}", e);
-            } else {
-                println!("Command sent: {}", command);
-            }
-        } else {
-            println!("No Renode instance running.");
         }
-    }
-
-    fn display_simulator_window(&mut self, ctx: &egui::Context) {
-        if self.simulator_open {
-            egui::Window::new("Simulator")
-                .resizable(true)
-                .collapsible(false)
-                .show(ctx, |ui| {
-                    ui.label("Welcome to the Simulator!");
-
-                    if ui.button("Start Renode").clicked() {
-                        self.start_renode();
-                    }
-
-                    if ui.button("Load Script").clicked() {
-                        self.project.build_and_create_script(ctx);
-                        println!("Test script loaded.");
-                        //self.send_command("i $CWD/src/app/simulator/renode/scripts/STM32Test.resc");
-                        self.send_command("i $CWD\\src\\app\\simulator\\renode\\scripts\\generated/currentScript.resc");
-                    }
-
-                    if ui.button("Close Simulator").clicked() {
-                        self.simulator_open = false;
-                        self.stop_renode();
-                        println!("Closing simulator window");
-                    }
-
-                    ui.label("Renode Output:");
-
-                    let log = self.renode_output.lock().expect("Failed to lock output");
-    
-                    egui::ScrollArea::vertical()
-                    .max_height(300.0) // Keeps it from taking too much space
-                    .stick_to_bottom(true) // This makes it auto-scroll!
-                    .show(ui, |ui| {
-                        ui.text_edit_multiline(&mut log.clone());
-                    });
-
-
-                    // if self.warning_flags.display_renode_missing_warning {
-                    //     egui::Window::new("Renode Not Found")
-                    //         .collapsible(false)
-                    //         .resizable(false)
-                    //         .show(ctx, |ui| {
-                    //             ui.label("Renode is not installed or not found in your PATH.");
-                    //             if ui.button("Download Renode").clicked() {
-                    //                 let _ = webbrowser::open("https://github.com/renode/renode");
-                    //             }
-                    //             if ui.button("Close").clicked() {
-                    //                 self.warning_flags.display_renode_missing_warning = false;
-                    //             }
-                    //         });
-                    // }
-    
-                });
-        }
+        return app;
     }
 
     /// Set the colorscheme for the app
@@ -403,6 +238,7 @@ impl IronCoderApp {
             mode,
             project,
             simulator_open,
+            display_resource_window,
             ..
         } = self;
         let icons_ref: Arc<IconSet> = ctx.data_mut(|data| {
@@ -502,14 +338,6 @@ impl IronCoderApp {
                         }
 
                         let ib = egui::widgets::Button::image_and_text(
-                            icons.get("file_icon").unwrap().clone(),
-                            "simulator"
-                        );
-                        if ui.add(ib).clicked() {
-                            *simulator_open = !*simulator_open;
-                        }
-
-                        let ib = egui::widgets::Button::image_and_text(
                             icons.get("quit_icon").unwrap().clone(),
                             "quit"
                         ).shortcut_text("ctrl+q");
@@ -517,6 +345,14 @@ impl IronCoderApp {
                         // TODO: set tint to the appropriate value for the current colorscheme
                         if ui.add(ib).clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+
+                        let ib = egui::widgets::Button::image_and_text(
+                        icons.get("settings_icon").unwrap().clone(), 
+                        "resource monitor");
+                        if ui.add(ib).clicked()
+                        {
+                            *display_resource_window = !*display_resource_window;
                         }
                     });
                 });
@@ -533,6 +369,60 @@ impl IronCoderApp {
     /// Returns a copy of the list of available boards.
     pub fn get_boards(&self) -> Vec<board::Board> {
         self.boards.clone()
+    }
+
+    // Displays resource monitor window with 
+    fn display_resource_monitor(&mut self, ctx: &egui::Context)
+    {
+        let Self {
+            display_resource_window,
+            ..
+        } = self;
+        if !*display_resource_window { return; }
+
+        self.system_info.refresh_all();
+        let processes = self.system_info.processes();
+        let iron_coder = processes.get_key_value(&self.iron_coder_pid).unwrap().1;
+        let mut cpu_use = String::from("CPU Usage: ");
+        cpu_use.push_str(&iron_coder.cpu_usage().to_string());
+        cpu_use += "%";
+        let mut memory_use = String::from("Memory Usage: ");
+        memory_use.push_str(&iron_coder.memory().to_string());
+        memory_use += " bytes";
+        let mut disk_use = String::from("Disk Usage(Read): ");
+        disk_use.push_str(&iron_coder.disk_usage().total_read_bytes.to_string());
+        disk_use += " bytes";
+        let mut run_time = String::from("Run Time: ");
+        run_time.push_str(&iron_coder.run_time().to_string());
+        run_time += " seconds";
+        let window = egui::Window::new("Resource Monitor")
+        .open(display_resource_window)
+        .collapsible(false)
+        .resizable(false)
+        .movable(true)
+        .show(ctx, |ui|
+        {
+            ui.add(
+                egui::TextEdit::singleline(&mut cpu_use)
+                .interactive(false)
+                .frame(false)
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut memory_use)
+                .interactive(false)
+                .frame(false)
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut disk_use)
+                .interactive(false)
+                .frame(false)
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut run_time)
+                .interactive(false)
+                .frame(false)
+            );
+        });
     }
 
     /// Show the main view when we're developing a project
@@ -1160,7 +1050,7 @@ impl eframe::App for IronCoderApp {
         self.unselected_mainboard_warning(ctx);
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
-        self.display_simulator_window(ctx);
+        self.display_resource_monitor(ctx);
         self.display_renode_missing_warning(ctx);
 
 

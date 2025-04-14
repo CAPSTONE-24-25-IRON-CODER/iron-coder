@@ -15,8 +15,7 @@ use core::f32;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{fs, string};
-use std::io::{self, BufReader, Read, SeekFrom, Write, BufRead};
-use std::os::windows::fs::FileExt;
+use std::io::{self, BufReader, Read, SeekFrom, Seek, Write, BufRead};
 use std::path::{Path, PathBuf};
 use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
@@ -102,99 +101,217 @@ impl Project {
 
     /// show the terminal pane
     pub fn display_terminal(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        if(!Path::new("out.txt").exists())
+        if(cfg!(windows))
         {
-            fs::File::create("out.txt");
-        }
-        self.spawn_child();
-        // write output from text file to persitant buffer 
-        let mut lines = Vec::<String>::new();
-        let mut file = File::open("out.txt").unwrap();
-        let mut last_line = String::from("");
-        let mut reader = BufReader::new(
-        DecodeReaderBytesBuilder::new()
-            .encoding(Some(WINDOWS_1252))
-            .build(file));
-        let mut buffer = vec![];
-        reader.read_to_end(&mut buffer).unwrap();
-        buffer = strip_ansi_escapes::strip(buffer);
-        lines = String::from_utf8(buffer)
-        .unwrap()
-        .lines()
-        .map(String::from)
-        .collect();
-        if(!lines.is_empty())
-        {
-            last_line = lines.last().unwrap().to_string();
-            if(last_line.contains(">"))
+            if(!Path::new("out.txt").exists())
             {
-                // check if directory was updated and if self.directory needs to be changed as well
-                if(last_line.contains(">") && self.directory != last_line)
+                fs::File::create("out.txt");
+            }
+            self.spawn_child();
+            // write output from text file to persitant buffer 
+            let mut lines = Vec::<String>::new();
+            let mut file = File::open("out.txt").unwrap();
+            let mut last_line = String::from("");
+            let mut reader = BufReader::new(
+            DecodeReaderBytesBuilder::new()
+                .encoding(Some(WINDOWS_1252))
+                .build(file));
+            let mut buffer = vec![];
+            reader.read_to_end(&mut buffer).unwrap();
+            buffer = strip_ansi_escapes::strip(buffer);
+            lines = String::from_utf8(buffer)
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect();
+            if(!lines.is_empty())
+            {
+                last_line = lines.last().unwrap().to_string();
+                if(last_line.contains(">"))
                 {
-                    self.update_directory = true;
-                }
-            }
-        }
-        if((self.update_directory && !lines.is_empty()) || (!lines.is_empty() && self.directory.is_empty()))
-        {
-            self.directory = last_line;
-            if(self.directory.contains(">"))
-            {
-                let index = self.directory.find(">").unwrap();
-                let _ = self.directory.split_off(index + 2);
-            }
-            self.terminal_buffer = self.directory.to_string().clone(); 
-            self.update_directory = false;  
-        }
-        if(self.terminal_buffer.is_empty())
-        {
-            self.terminal_buffer = self.directory.clone();
-        }        
-        if(!self.terminal_buffer.is_empty())
-        {
-            if(self.terminal_buffer.len() < self.directory.len())
-            {
-                self.terminal_buffer = self.directory.clone();
-            }
-        }
-        if(!lines.is_empty())
-        {
-            lines.remove(lines.len() - 1);
-        }
-        self.persistant_buffer = lines.join("\n");
-        egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
-            egui::ScrollArea::both()
-            .auto_shrink([false; 2])
-            .stick_to_bottom(true)
-            .show(ui, |ui| {
-                ui.add(
-                    egui::TextEdit::multiline(&mut self.persistant_buffer)
-                    .interactive(false)
-                    .frame(false)
-                    .desired_width(f32::INFINITY)
-                );
-                let response = ui.add(
-                    egui::TextEdit::multiline(&mut self.terminal_buffer)
-                    .interactive(true)
-                    .desired_width(f32::INFINITY)
-                    .frame(false)
-                );
-                
-                if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
-                    // parse line at carrot to get command to send to shell
-                    let index = self.terminal_buffer.find('>');
-                    let index_num = index.unwrap_or(0) + 1;
-
-                    // write command from terminal buffer to child process
-                    let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
-                    if(self.terminal_buffer[index_num..].contains("cd"))
+                    // check if directory was updated and if self.directory needs to be changed as well
+                    if(last_line.contains(">") && self.directory != last_line)
                     {
                         self.update_directory = true;
                     }
-                    self.terminal_buffer.clear();
                 }
+            }
+            if((self.update_directory && !lines.is_empty()) || (!lines.is_empty() && self.directory.is_empty()))
+            {
+                self.directory = last_line;
+                if(self.directory.contains(">"))
+                {
+                    let index = self.directory.find(">").unwrap();
+                    let _ = self.directory.split_off(index + 2);
+                }
+                self.terminal_buffer = self.directory.to_string().clone(); 
+                self.update_directory = false;  
+            }
+            if(self.terminal_buffer.is_empty())
+            {
+                self.terminal_buffer = self.directory.clone();
+            }        
+            if(!self.terminal_buffer.is_empty())
+            {
+                if(self.terminal_buffer.len() < self.directory.len())
+                {
+                    self.terminal_buffer = self.directory.clone();
+                }
+            }
+            if(!lines.is_empty())
+            {
+                lines.remove(lines.len() - 1);
+            }
+            self.persistant_buffer = lines.join("\n");
+            egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
+                egui::ScrollArea::both()
+                .auto_shrink([false; 2])
+                .stick_to_bottom(true)
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.persistant_buffer)
+                        .interactive(false)
+                        .frame(false)
+                        .desired_width(f32::INFINITY)
+                    );
+                    let response = ui.add(
+                        egui::TextEdit::multiline(&mut self.terminal_buffer)
+                        .interactive(true)
+                        .desired_width(f32::INFINITY)
+                        .frame(false)
+                    );
+                    
+                    if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                        // parse line at carrot to get command to send to shell
+                        let index = self.terminal_buffer.find('>');
+                        let index_num = index.unwrap_or(0) + 1;
+    
+                        // write command from terminal buffer to child process
+                        let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
+                        if(self.terminal_buffer[index_num..].contains("cd"))
+                        {
+                            self.update_directory = true;
+                        }
+                        self.terminal_buffer.clear();
+                    }
+                });
             });
-        });
+        }
+        else 
+        {
+            if(!Path::new("out.txt").exists())
+            {
+                fs::File::create("out.txt");
+            }
+            self.spawn_child();
+            // write output from text file to persitant buffer 
+            let mut lines = Vec::<String>::new();
+            let mut file = File::open("out.txt").unwrap();
+            let mut last_line = String::from("");
+            let print_directory_mac_id = egui::Id::new("print_directory_mac_id");
+            let mut print_directory_mac = _ctx.data_mut(|data| {
+                data.get_temp_mut_or(print_directory_mac_id, true).clone()
+            });
+            // get the current working directory
+            if print_directory_mac {
+                let _ = self.terminal_stdin.as_mut().unwrap().write_all("pwd\n".as_bytes());
+                _ctx.data_mut(|data| {
+                    data.insert_temp(print_directory_mac_id, false);
+                });
+            }
+            // remove last line from file
+            let mut reader = BufReader::new(
+            DecodeReaderBytesBuilder::new()
+                .encoding(Some(WINDOWS_1252))
+                .build(file));
+            let mut buffer = vec![];
+            let size = reader.read_to_end(&mut buffer).unwrap();
+            buffer = strip_ansi_escapes::strip(buffer);
+            lines = String::from_utf8(buffer)
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect();
+            if(!lines.is_empty())
+            {
+                last_line = lines.last().unwrap().to_string();
+                // remove new line character from end and / at begining
+                last_line.remove(last_line.len() - 1);
+                last_line.remove(0);
+                last_line += "%";
+                if(last_line.contains("%"))
+                {
+                    // check if directory was updated and if self.directory needs to be changed as well
+                    if(last_line.contains("%") && self.directory != last_line)
+                    {
+                        self.update_directory = true;
+                    }
+                }
+            }
+            if((self.update_directory && !lines.is_empty()) || (!lines.is_empty() && self.directory.is_empty()))
+            {
+                self.directory = last_line;
+                if(self.directory.contains("%") && !self.directory.ends_with("%"))
+                {
+                    let index = self.directory.find("%").unwrap();
+                    let _ = self.directory.split_off(index + 2);
+                }
+                self.terminal_buffer = self.directory.to_string().clone(); 
+                self.update_directory = false;  
+            }
+            if(self.terminal_buffer.is_empty())
+            {
+                self.terminal_buffer = self.directory.clone();
+            }        
+            if(!self.terminal_buffer.is_empty())
+            {
+                if(self.terminal_buffer.len() < self.directory.len())
+                {
+                    self.terminal_buffer = self.directory.clone();
+                }
+            }
+            if(!lines.is_empty())
+            {
+                lines.remove(lines.len() - 1);
+            }
+            self.persistant_buffer = lines.join("\n");
+            egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
+                egui::ScrollArea::both()
+                .auto_shrink([false; 2])
+                .stick_to_bottom(true)
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.persistant_buffer)
+                        .interactive(false)
+                        .frame(false)
+                        .desired_width(f32::INFINITY)
+                    );
+                    let response = ui.add(
+                        egui::TextEdit::multiline(&mut self.terminal_buffer)
+                        .interactive(true)
+                        .desired_width(f32::INFINITY)
+                        .frame(false)
+                    );
+                    
+                    if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                        // parse line at carrot to get command to send to shell
+                        let index = self.terminal_buffer.find('%');
+                        let index_num = index.unwrap_or(0) + 1;
+                        _ctx.data_mut(|data| {
+                            data.insert_temp(print_directory_mac_id, true);
+                        });
+    
+                        // write command from terminal buffer to child process
+                        let _ = self.terminal_stdin.as_mut().unwrap().write_all(self.terminal_buffer[index_num..].as_bytes());
+                        if(self.terminal_buffer[index_num..].contains("cd"))
+                        {
+                            self.update_directory = true;
+                        }
+                        self.terminal_buffer.clear();
+                    }
+                });
+            });    
+        }
     }
 
     fn display_output_pane(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui)
@@ -251,11 +368,12 @@ impl Project {
                         let mut stdin = stdin.lock().expect("Failed to lock stdin");
                         if let Err(e) = writeln!(stdin, "{}", self.simulator_command_buffer) {
                             println!("Failed to send command to Renode: {}", e);
+                            self.output_buffer += "No Renode Instance running. Click simulate to start.\n";
                         } else {
                             println!("Command sent: {}", self.simulator_command_buffer);
                         }
                     } else {
-                        println!("No Renode instance running.");
+                        self.output_buffer += "No Renode Instance running. Click simulate to start.\n";
                     }
                     if(self.simulator_command_buffer.contains("quit"))
                     {
@@ -327,7 +445,7 @@ impl Project {
     // spawns terminal application if no terminal has spawned yet
     fn spawn_child(&mut self)
     {
-        if(!self.spawn_child)
+        if(!self.spawn_child && cfg!(windows))
         {
             self.spawn_child = true;
             let file = File::create("out.txt").unwrap();
@@ -345,23 +463,63 @@ impl Project {
                 temp.unwrap().kill();
             }
         }
+        else if(!self.spawn_child)
+        {
+            self.spawn_child = true;
+            let file = File::create("out.txt").unwrap();
+            let stdio = Stdio::from(file);
+            // test to ensure child can be spawned
+            let shell = std::env::var("SHELL").unwrap_or("/bin/zsh".to_string());
+            let temp = Command::new(shell.clone()).spawn();
+            if(temp.is_ok())
+            {
+                self.terminal_app = Some(Command::new(shell.clone())
+                .stdin(Stdio::piped())
+                .stdout(stdio)
+                .spawn()
+                .unwrap());
+                self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+                temp.unwrap().kill();
+            }
+        }
     }
     // restarts terminal shell and output stream for clearing
     fn restart_terminal(&mut self)
     {
-        let file = File::create("out.txt").unwrap();
-        let stdio = Stdio::from(file);
-        // test to ensure child can be spawned
-        let temp = Command::new("powershell").spawn();
-        if(temp.is_ok())
+        if(cfg!(windows))
         {
-            self.terminal_app = Some(Command::new("powershell")
-            .stdin(Stdio::piped())
-            .stdout(stdio)
-            .spawn()
-            .unwrap());
-            self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
-            temp.unwrap().kill();
+            let file = File::create("out.txt").unwrap();
+            let stdio = Stdio::from(file);
+            // test to ensure child can be spawned
+            let temp = Command::new("powershell").spawn();
+            if(temp.is_ok())
+            {
+                self.terminal_app = Some(Command::new("powershell")
+                .stdin(Stdio::piped())
+                .stdout(stdio)
+                .spawn()
+                .unwrap());
+                self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+                temp.unwrap().kill();
+            }
+        }
+        else 
+        {
+            let file = File::create("out.txt").unwrap();
+            let stdio = Stdio::from(file);
+            // test to ensure child can be spawned
+            let shell = std::env::var("SHELL").unwrap_or("/bin/zsh".to_string());
+            let temp = Command::new(shell.clone()).spawn();
+            if(temp.is_ok())
+            {
+                self.terminal_app = Some(Command::new(shell.clone())
+                .stdin(Stdio::piped())
+                .stdout(stdio)
+                .spawn()
+                .unwrap());
+                self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+                temp.unwrap().kill();
+            }
         }
         self.update_directory = true;
     }
@@ -481,7 +639,8 @@ impl Project {
         }
         else 
         {
-            info!("No project to simulate")    
+            info!("No project to simulate");
+            self.output_buffer += "No project to simulate!\n";    
         }
     }
 
@@ -652,8 +811,9 @@ impl Project {
             } else {
                 println!("Command sent: {}", command);
             }
-        } else {
-            println!("No Renode instance running.");
+        } else 
+        {
+            println!("No Renode instance running");
         }
     }
 
@@ -731,8 +891,12 @@ impl Project {
             }
 
             ui.separator();
-
-            if(ui.button("Simulate").clicked())
+            let button = egui::widgets::Button::new("Simulate");
+            if(!self.system.main_board.as_mut().unwrap().get_name().contains("STM32F4"))
+            {
+                ui.add_enabled(false, button);
+            }
+            else if(ui.add(button).clicked())
             {
                 if(self.location.is_some())
                 {
