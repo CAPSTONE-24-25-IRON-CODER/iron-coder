@@ -7,19 +7,28 @@
 use egui::{Color32, Key, PointerButton, Pos2, Rect, Response, TextBuffer, Vec2, Widget};
 use egui_extras::RetainedImage;
 use fs_extra::file::read_to_string;
+use image::codecs::hdr::read_raw_file;
 use log::{info, warn};
+use tracing::instrument::WithSubscriber;
+use tracing::Instrument;
 use core::f32;
 use std::collections::HashMap;
-use std::fs;
-use std::io::{Read, SeekFrom, Write};
+use std::fmt::Debug;
+use std::{fs, string};
+use std::io::{self, BufReader, Read, SeekFrom, Write, BufRead};
 use std::os::windows::fs::FileExt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use egui::text_selection::visuals::paint_cursor;
 use egui::widget_text::RichText;
 use egui::widgets::Button;
 use git2::{Repository, StatusOptions};
 use std::fs::File;
+use encoding_rs::WINDOWS_1252;
+use encoding_rs_io::DecodeReaderBytesBuilder;
+use strip_ansi_escapes::{self, strip};
+use std::thread;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::board;
 use crate::project::Project;
@@ -33,6 +42,8 @@ use serde::{Serialize, Deserialize};
 use crate::board::{Board, BoardTomlInfo, BoardType};
 use crate::board::svg_reader::{Error, SvgBoardInfo};
 use super::system;
+use toml::de::from_str;
+use toml::Value;
 //use crate::serial_monitor::show;
 
 use std::process::{Command, Stdio, Child};
@@ -43,6 +54,13 @@ pub enum ProjectViewType {
     BoardsView,
     FileTree,
     CrateView(String),
+}
+
+pub enum BottomPaneViewType
+{
+    TerminalView,
+    OuputView,
+    SimulatorView,
 }
 
 // this block contains the display related
@@ -91,14 +109,40 @@ impl Project {
         self.spawn_child();
         // write output from text file to persitant buffer 
         let mut lines = Vec::<String>::new();
-        lines = read_to_string("out.txt")
+        let mut file = File::open("out.txt").unwrap();
+        let mut last_line = String::from("");
+        let mut reader = BufReader::new(
+        DecodeReaderBytesBuilder::new()
+            .encoding(Some(WINDOWS_1252))
+            .build(file));
+        let mut buffer = vec![];
+        reader.read_to_end(&mut buffer).unwrap();
+        buffer = strip_ansi_escapes::strip(buffer);
+        lines = String::from_utf8(buffer)
         .unwrap()
         .lines()
         .map(String::from)
         .collect();
+        if(!lines.is_empty())
+        {
+            last_line = lines.last().unwrap().to_string();
+            if(last_line.contains(">"))
+            {
+                // check if directory was updated and if self.directory needs to be changed as well
+                if(last_line.contains(">") && self.directory != last_line)
+                {
+                    self.update_directory = true;
+                }
+            }
+        }
         if((self.update_directory && !lines.is_empty()) || (!lines.is_empty() && self.directory.is_empty()))
         {
-            self.directory = lines.last().unwrap().to_string();
+            self.directory = last_line;
+            if(self.directory.contains(">"))
+            {
+                let index = self.directory.find(">").unwrap();
+                let _ = self.directory.split_off(index + 2);
+            }
             self.terminal_buffer = self.directory.to_string().clone(); 
             self.update_directory = false;  
         }
@@ -118,26 +162,6 @@ impl Project {
             lines.remove(lines.len() - 1);
         }
         self.persistant_buffer = lines.join("\n");
-        // If there is an open channel, see if we can get some data from it
-        if let Some(rx) = &self.receiver {
-            while let Ok(s) = rx.try_recv() {
-                self.output_buffer += s.as_str();
-            }
-        }
-        egui::CollapsingHeader::new("Output").show(ui, |ui| {
-            egui::ScrollArea::both()
-            .auto_shrink([false; 2])
-            .stick_to_bottom(true)
-            .show(ui, |ui|
-            {
-                ui.add(
-                    egui::TextEdit::multiline(&mut self.output_buffer)
-                    .interactive(false)
-                    .frame(false)
-                    .desired_width(f32::INFINITY)
-                );
-            })
-        });
         egui::CollapsingHeader::new("Terminal").show(ui, |ui| {
             egui::ScrollArea::both()
             .auto_shrink([false; 2])
@@ -151,7 +175,6 @@ impl Project {
                 );
                 let response = ui.add(
                     egui::TextEdit::multiline(&mut self.terminal_buffer)
-                    .code_editor()
                     .interactive(true)
                     .desired_width(f32::INFINITY)
                     .frame(false)
@@ -173,6 +196,134 @@ impl Project {
             });
         });
     }
+
+    fn display_output_pane(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui)
+    {
+         // If there is an open channel, see if we can get some data from it
+         if let Some(rx) = &self.receiver {
+            while let Ok(s) = rx.try_recv() {
+                self.output_buffer += s.as_str();
+            }
+        }
+        egui::CollapsingHeader::new("Output").show(ui, |ui| {
+            egui::ScrollArea::both()
+            .stick_to_bottom(true)
+            .show(ui, |ui|
+            {
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.output_buffer)
+                    .interactive(false)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+            })
+        });
+    }
+
+    // this function displays the simulator pane in the bottom panel of the app
+    fn display_simulator_pane(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui)
+    {
+        egui::CollapsingHeader::new("Simulator").show(ui, |ui|
+        {
+            let log = self.renode_output.lock().expect("Failed to lock output");
+            let mut output_string = log.clone();
+            output_string = strip_ansi_escapes::strip_str(output_string);
+            egui::ScrollArea::both()
+            .stick_to_bottom(true)
+            .show(ui, |ui|
+            {
+                ui.add(
+                    egui::TextEdit::multiline(&mut output_string)
+                    .interactive(false)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+                ui.separator();
+                let response = ui.add(
+                    egui::TextEdit::multiline(&mut self.simulator_command_buffer)
+                    .interactive(true)
+                    .frame(false)
+                    .desired_width(f32::INFINITY)
+                );
+                if response.changed() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
+                    // send command from buffer to renode
+                    if let Some(stdin) = &self.stdin {
+                        let mut stdin = stdin.lock().expect("Failed to lock stdin");
+                        if let Err(e) = writeln!(stdin, "{}", self.simulator_command_buffer) {
+                            println!("Failed to send command to Renode: {}", e);
+                        } else {
+                            println!("Command sent: {}", self.simulator_command_buffer);
+                        }
+                    } else {
+                        println!("No Renode instance running.");
+                    }
+                    if(self.simulator_command_buffer.contains("quit"))
+                    {
+                        // kill renode
+                        if let Some(mut child) = self.renode_process.take() {
+                            if let Err(e) = child.kill() {
+                                println!("Failed to stop Renode: {}", e);
+                            } else {
+                                println!("Renode stopped.");
+                            }
+                        } else {
+                            println!("No Renode instance running.");
+                        }
+                    }
+                    self.simulator_command_buffer.clear();
+                }
+            })
+        });
+    }
+
+
+
+    // display bottom pane
+    fn display_bottom_pane_tabs(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui)
+    {
+        ui.columns(3, |columns| {
+            let terminal_button = egui::Button::new("Terminal").frame(false);
+            let output_button = egui::Button::new("Output").frame(false);
+            let simulator_button = egui::Button::new("Simulation").frame(false);
+            if(columns[0].add(terminal_button).clicked())
+            {
+                let i = Some(BottomPaneViewType::TerminalView);
+                self.bottom_view = i;
+            }
+            if(columns[1].add(output_button).clicked())
+            {
+                let i = Some(BottomPaneViewType::OuputView);
+                self.bottom_view = i;
+            }
+            if(columns[2].add(simulator_button).clicked())
+            {
+                let i = Some(BottomPaneViewType::SimulatorView);
+                self.bottom_view = i;
+            }
+        });
+    }
+
+    pub fn display_bottom_pane(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui)
+    {
+        self.display_bottom_pane_tabs(_ctx, ui);
+        // if bottom veiw option is empty force it to start as terminal
+        if(self.bottom_view.is_none())
+        {
+            let i = Some(BottomPaneViewType::TerminalView);
+            self.bottom_view = i;
+        }
+
+        // check what view and display correct type
+        match self.bottom_view.as_ref().unwrap() {
+            BottomPaneViewType::TerminalView => 
+            self.display_terminal(_ctx, ui),
+            BottomPaneViewType::OuputView =>
+            self.display_output_pane(_ctx, ui),
+            BottomPaneViewType::SimulatorView =>
+            self.display_simulator_pane(_ctx, ui),
+            _ => println!("No tab selected"),
+        }
+    }
     // spawns terminal application if no terminal has spawned yet
     fn spawn_child(&mut self)
     {
@@ -181,12 +332,18 @@ impl Project {
             self.spawn_child = true;
             let file = File::create("out.txt").unwrap();
             let stdio = Stdio::from(file);
-            self.terminal_app = Some(Command::new("powershell")
-            .stdin(Stdio::piped())
-            .stdout(stdio)
-            .spawn()
-            .expect("Error"));
-            self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+            // test to ensure child can be spawned
+            let temp = Command::new("powershell").spawn();
+            if(temp.is_ok())
+            {
+                self.terminal_app = Some(Command::new("powershell")
+                .stdin(Stdio::piped())
+                .stdout(stdio)
+                .spawn()
+                .unwrap());
+                self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+                temp.unwrap().kill();
+            }
         }
     }
     // restarts terminal shell and output stream for clearing
@@ -194,12 +351,18 @@ impl Project {
     {
         let file = File::create("out.txt").unwrap();
         let stdio = Stdio::from(file);
-        self.terminal_app = Some(Command::new("powershell")
-        .stdin(Stdio::piped())
-        .stdout(stdio)
-        .spawn()
-        .expect("Error"));
-        self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+        // test to ensure child can be spawned
+        let temp = Command::new("powershell").spawn();
+        if(temp.is_ok())
+        {
+            self.terminal_app = Some(Command::new("powershell")
+            .stdin(Stdio::piped())
+            .stdout(stdio)
+            .spawn()
+            .unwrap());
+            self.terminal_stdin = self.terminal_app.as_mut().unwrap().stdin.take();
+            temp.unwrap().kill();
+        }
         self.update_directory = true;
     }
 
@@ -216,8 +379,286 @@ impl Project {
         self.display_directory(dir, 0, ctx, ui);
     }
 
+    pub fn start_renode(&mut self, ctx: &egui::Context ,warning_flags: &mut Warnings) {
+        if self.renode_process.is_some() {
+            println!("Renode is already running.");
+            return;
+        }
+
+        // we need to add a check to see if renode is intalled
+        let check_command = if cfg!(target_os = "windows") { "where" } else { "which" };
+
+        let renode_exists = Command::new(check_command)
+            .arg("renode")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+    
+        if !renode_exists {
+            println!("Error: Renode is not installed or not found in PATH.");
+            warning_flags.display_renode_missing_warning = true;
+            return;
+        }
+
+        let mut child: Child = match Command::new("renode")
+            //.arg("--disable-xwt")
+            .arg("--console")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            {
+                Ok(child) => child,
+                Err(e) => {
+                println!("Failed to start Renode: {}", e);
+                return;
+            }
+            };        
+
+        println!("Renode started!");
+
+        // Here we are taking the the stdin of the child process and storing it in the IronCoderApp struct
+        // This will allow us to send commands in other functions by locking the stdin and writing to it
+        let stdin = child.stdin.take().expect("Failed to get stdin of Renode process");
+        self.stdin = Some(Arc::new(Mutex::new(stdin)));
+    
+        let output_ref = Arc::clone(&self.renode_output);
+        let stdout = child.stdout.take().expect("Failed to take stdout");
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                match line {
+                    Ok(output) => {
+                        println!("Renode stdout: {}", output);
+                        let mut log = output_ref.lock().expect("Failed to lock output");
+                        log.push_str(&format!("{}\n", output));
+                    }
+                    Err(e) => println!("Failed to read Renode stdout: {}", e),
+                }
+            }
+        });
+    
+        let output_ref = Arc::clone(&self.renode_output);
+        let stderr = child.stderr.take().expect("Failed to take stderr");
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(output) => {
+                        println!("Renode stderr: {}", output);
+                        let mut log = output_ref.lock().expect("Failed to lock output");
+                        log.push_str(&format!("{}\n", output));
+                    }
+                    Err(e) => println!("Failed to read Renode stderr: {}", e),
+                }
+            }
+        });
+    
+
+        self.renode_process = Some(child);
+        // self.start_auto_save();
+    }
+
+    // this function uses the current project path to build a path to the target elf file depending on the processor for the hardware
+    fn load_elf_renode(&mut self)
+    {
+        // get path information
+        let path = self.location.as_ref();
+        if(path.is_some())
+        {
+            println!("{}", path.unwrap().display().to_string());
+            // build path
+            let mut start_of_path = path.unwrap().display().to_string();
+            let name = self.borrow_name();
+            // right now only building based on thumbv7em (which is cortex M4 ARM)
+            start_of_path += "/target/thumbv7em-none-eabihf/debug/";
+            start_of_path += name;
+            let mut command = String::from("sysbus LoadELF @");
+            command += &start_of_path;
+            self.send_command(&command);
+        }
+        else 
+        {
+            info!("No project to simulate")    
+        }
+    }
+
+    /// Create a Renode script that loads an ELF file.
+     pub fn create_renode_script(elf_path: &Path, script_path: &Path) -> io::Result<()> {
+    // Open the script file for writing (create it if it doesn't exist)
+    let mut script_file = File::create(script_path)?;
+
+    // Write Renode script commands
+    writeln!(script_file, "# Renode script for ELF file")?;
+    writeln!(script_file, "using sysbus")?;
+    writeln!(script_file, "mach create")?;
+
+    // Load the platform description
+    writeln!(script_file, "machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl")?;
+
+    // CPU settings
+    writeln!(script_file, "cpu PerformanceInMips 125")?;
+
+    // Optional: Define a macro for resetting
+    writeln!(script_file, "macro reset")?;
+    writeln!(script_file, "\"\"\"")?;
+    writeln!(script_file, "sysbus LoadELF $CWD/{}", elf_path.display())?;
+    writeln!(script_file, "\"\"\"")?;
+
+    // Execute the reset macro
+    writeln!(script_file, "runMacro $reset")?;
+
+    // Setup the log file for output
+    writeln!(script_file, "logFile $ORIGIN/output.txt")?;
+
+    // Show analyzer (Could be moved to a separate function)
+    writeln!(script_file, "showAnalyzer sysbus.usart2")?;
+
+    // Start the simulation
+    writeln!(script_file, "start")?;
+
+    // Optional: Log GPIO activity (for testing peripherals)
+    writeln!(script_file, "# New Testing for obtaining peripherals")?;
+    writeln!(script_file, "logLevel -1 gpioPortD")?;
+
+    // Enable logging of peripherals
+    writeln!(script_file, "peripherals")?;
+    writeln!(script_file, "logFile $ORIGIN/../../logs/output.txt")?;
+
+    // Finish the script
+    writeln!(script_file, "# Simulation ends")?;
+
+    // Return success if no errors occurred
+    Ok(())
+}
+
+    // this is used when the simulator is asked to load the program
+    pub fn build_and_create_script(&mut self, ctx: &egui::Context) {
+        // Build the project
+        self.build(ctx);
+    
+        // Get the ELF file path
+        if let Some(elf_path) = self.get_elf_file_path(self.location.as_ref().expect("No project location found.")) {
+            let script_path = Path::new(".\\src\\app\\simulator\\renode\\scripts\\generated/currentScript.resc");
+    
+            // Create Renode script
+            if let Err(e) = Project::create_renode_script(&elf_path, script_path) {
+                self.info_logger(&format!("Error creating Renode script: {}", e));
+            } else {
+                self.info_logger("Renode script created successfully.");
+            }
+        } else {
+            self.info_logger("No ELF file found.");
+        }
+    }
+    
+    // since different projects might have different names, we dynamically obtain them so we have the right file
+    fn get_package_name_from_toml(&self, project_path: &Path) -> Option<String> {
+        // Load the Cargo.toml content
+        let toml_path = project_path.join("Cargo.toml");
+        let toml_content = fs::read_to_string(toml_path).ok()?;
+    
+        // Parse the TOML content
+        let parsed_toml: toml::Value = toml_content.parse().ok()?;
+    
+        // Extract the package name
+        parsed_toml
+            .get("package")
+            .and_then(|pkg| pkg.get("name"))
+            .and_then(|name| name.as_str())
+            .map(|s| s.to_string())
+    }
+    
+    // Get the path to the ELF file after building the project
+    fn get_elf_file_path(&self, project_path: &Path) -> Option<PathBuf> {
+        let target = self.get_project_build_target(project_path)
+        .unwrap_or_else(|| "thumbv6m-none-eabi".to_string());
+
+        if let Some(package_name) = self.get_package_name_from_toml(project_path) {
+            let target_dir = project_path.join(format!("target/{}/debug", target));
+            let elf_file_path = target_dir.join(&package_name);
+    
+            // Try with and without an extension
+            if elf_file_path.exists() {
+                Some(elf_file_path)
+            } else {
+                // Try adding the .elf extension
+                let elf_with_extension = elf_file_path.with_extension("elf");
+                if elf_with_extension.exists() {
+                    Some(elf_with_extension)
+                } else {
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    fn get_project_build_target(&self, project_path: &Path) -> Option<String> {
+        let cargo_config_path = project_path.join(".cargo/config.toml");
+        
+        if cargo_config_path.exists() {
+            let config_content = fs::read_to_string(&cargo_config_path).ok()?;
+            let parsed_toml: Value = config_content.parse().ok()?;
+
+            return parsed_toml.get("build")
+                .and_then(|build| build.get("target"))
+                .and_then(|target| target.as_str())
+                .map(|s| s.to_string());
+        }
+
+        // Fallback: If `.cargo/config.toml` doesn’t exist, check `Cargo.toml`
+        let cargo_toml_path = project_path.join("Cargo.toml");
+
+        if cargo_toml_path.exists() {
+            let cargo_content = fs::read_to_string(&cargo_toml_path).ok()?;
+            let parsed_toml: Value = cargo_content.parse().ok()?;
+
+            return parsed_toml.get("package")
+                .and_then(|pkg| pkg.get("metadata"))
+                .and_then(|metadata| metadata.get("build-target"))
+                .and_then(|target| target.as_str())
+                .map(|s| s.to_string());
+        }
+
+        None
+     }
+
+    fn start_auto_save(&self) {
+        let stdin = self.stdin.as_ref().expect("Renode not running").clone();
+
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_secs(300));
+                let mut stdin = stdin.lock().expect("Failed to lock stdin");
+                if let Err(e) = writeln!(stdin, "i $CWD/src/app/simulator/renode/scripts/saveState.resc") {
+                    println!("Failed to send command to Renode: {}", e);
+                } else {
+                    println!("AutoSave command sent.");
+                }
+            }
+        });
+    }
+
+    // the send command was updated to obtain the lock for the stdin to be able to send in commands to Renode
+    fn send_command(&mut self, command: &str) {
+        if let Some(stdin) = &self.stdin {
+            let mut stdin = stdin.lock().expect("Failed to lock stdin");
+            if let Err(e) = writeln!(stdin, "{}", command) {
+                println!("Failed to send command to Renode: {}", e);
+            } else {
+                println!("Command sent: {}", command);
+            }
+        } else {
+            println!("No Renode instance running.");
+        }
+    }
+
     /// Show the project toolbar, with buttons to perform various actions
-    pub fn display_project_toolbar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, git_things: &mut Git) {
+    pub fn display_project_toolbar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, git_things: &mut Git, warning_flags: &mut Warnings) {
         let iconref: Arc<IconSet> = ctx.data_mut(|data| {
             data.get_temp("icons".into()).expect("error loading shared icons!")
         });
@@ -286,13 +727,29 @@ impl Project {
                 self.persistant_buffer.clear();
                 self.restart_terminal();
                 self.output_buffer.clear();
+                self.renode_output.lock().unwrap().clear();
             }
 
             ui.separator();
 
             if(ui.button("Simulate").clicked())
             {
-                self.output_buffer += "\nSimulate";
+                if(self.location.is_some())
+                {
+                    // Start Renode will check for renode and if there start it.
+                    self.start_renode(ctx ,warning_flags);
+
+                    self.build_and_create_script(ctx);
+
+                    self.send_command("i $CWD\\src\\app\\simulator\\renode\\scripts\\generated/currentScript.resc");
+
+                    self.start_auto_save();
+
+                    // create machine
+                    //self.load_elf_renode();
+                    // logging green LED blinking (this is ONLY for this board and program, user needs to set any other monitors thru sim pane)
+                    //self.send_command("logLevel -1 gpioPortG.GreenLED");
+                }
             }
             // Open a window to add changes
             // Commit the changes to the git repo with a user message
