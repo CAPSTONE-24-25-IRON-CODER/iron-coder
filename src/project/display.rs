@@ -553,6 +553,10 @@ impl Project {
             .status()
             .map(|status| status.success())
             .unwrap_or(false);
+
+
+        // print error if renode is not installed
+        println!("Renode exists: {}", renode_exists);
     
         if !renode_exists {
             println!("Error: Renode is not installed or not found in PATH.");
@@ -663,7 +667,7 @@ impl Project {
     // Optional: Define a macro for resetting
     writeln!(script_file, "macro reset")?;
     writeln!(script_file, "\"\"\"")?;
-    writeln!(script_file, "sysbus LoadELF $CWD/{}", elf_path.display())?;
+    writeln!(script_file, "sysbus LoadELF \"{}\"", elf_path.display())?;
     writeln!(script_file, "\"\"\"")?;
 
     // Execute the reset macro
@@ -902,6 +906,11 @@ impl Project {
                 {
                     // Start Renode will check for renode and if there start it.
                     self.start_renode(ctx ,warning_flags);
+
+                    if self.renode_process.is_none() {
+                        println!("Renode process is None, not starting simulation.");
+                        return;
+                    }
 
                     self.build_and_create_script(ctx);
 

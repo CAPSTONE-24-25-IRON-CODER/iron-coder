@@ -1050,7 +1050,6 @@ impl eframe::App for IronCoderApp {
         self.unselected_mainboard_warning(ctx);
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
-        self.display_resource_monitor(ctx);
         self.display_renode_missing_warning(ctx);
 
 
