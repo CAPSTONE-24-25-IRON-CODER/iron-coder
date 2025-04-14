@@ -14,6 +14,7 @@ use egui::{Button, Color32, TextBuffer, Vec2};
 use serde::{Serialize, Deserialize};
 
 use ra_ap_ide;
+use tracing_subscriber::fmt::writer::EitherWriter::B;
 
 pub mod svg_reader;
 use svg_reader::SvgBoardInfo;
@@ -31,8 +32,10 @@ use crate::board::pinout::{InterfaceDirection, InterfaceType};
 
 /// These are the various standard development board form factors
 #[non_exhaustive]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub enum BoardStandards {
+    #[default]
+    None,
     Feather,
     Arduino,
     RaspberryPi,
@@ -43,6 +46,7 @@ pub enum BoardStandards {
 impl fmt::Display for BoardStandards {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            BoardStandards::None => write!(f, "None"),
             BoardStandards::Feather => write!(f, "Feather"),
             BoardStandards::Arduino => write!(f, "Arduino"),
             BoardStandards::RaspberryPi => write!(f, "RaspberryPi"),
@@ -395,6 +399,16 @@ impl BoardTomlInfo {
         pinout_str
     }
 
+    pub fn get_all_pin_names(& self) -> Vec<String> {
+        let mut pin_names : Vec<String> = Vec::new();
+        for pinout in &self.pinouts{
+            for pin in &pinout.pins{
+                pin_names.push(String::from(pin));
+            }
+        }
+        pin_names
+    }
+
     pub fn display_required_message(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, flag_id: &str){
         let field_required_id = egui::Id::new(flag_id);
         let mut display_name_required : bool = ctx.data_mut(|data| {
@@ -408,9 +422,9 @@ impl BoardTomlInfo {
         }
     }
 
-    pub fn update_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    pub fn update_general_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label("Board Name:");
+            ui.label("Component Name:");
             egui::TextEdit::singleline(&mut self.name)
                 .hint_text("Enter here").show(ui);
         });
@@ -445,13 +459,11 @@ impl BoardTomlInfo {
 
         ui.horizontal(|ui| {
             ui.label("Standard:");
-            if self.board_type == BoardType::Discrete {
-                self.standard = "Components".parse().unwrap();
-                ui.selectable_value(&mut self.standard, "Components".parse().unwrap(), "Components");
+            if self.board_type == BoardType::Discrete || self.board_type == BoardType::Peripheral{
+                self.standard = BoardStandards::None.to_string();
+                ui.selectable_value(&mut self.standard, BoardStandards::None.to_string(), "None");
             } else {
-                if self.standard.eq("Components") {
-                    self.standard.clear();
-                }
+                ui.selectable_value(&mut self.standard, BoardStandards::None.to_string(), "None");
                 ui.selectable_value(&mut self.standard, BoardStandards::Arduino.to_string(), "Arduino");
                 ui.selectable_value(&mut self.standard, BoardStandards::RaspberryPi.to_string(), "RaspberryPi");
                 ui.selectable_value(&mut self.standard, BoardStandards::Feather.to_string(), "Feather");
@@ -462,27 +474,29 @@ impl BoardTomlInfo {
 
         self.display_required_message(ctx, ui, "standard_required");
 
-        ui.horizontal(|ui| {
-            ui.label("CPU:");
-            egui::TextEdit::singleline(&mut self.cpu)
-                .hint_text("Enter here").show(ui);
-        });
+        if self.board_type == BoardType::Main {
+            ui.horizontal(|ui| {
+                ui.label("CPU:");
+                egui::TextEdit::singleline(&mut self.cpu)
+                    .hint_text("Enter here").show(ui);
+            });
 
-        self.display_required_message(ctx, ui, "cpu_required");
+            self.display_required_message(ctx, ui, "cpu_required");
 
-        ui.horizontal(|ui| {
-            ui.label("Flash (kb):");
-            ui.add(egui::Slider::new(&mut self.flash, 0..=8000));
-        });
+            ui.horizontal(|ui| {
+                ui.label("Flash (kb):");
+                ui.add(egui::Slider::new(&mut self.flash, 0..=8000));
+            });
 
-        self.display_required_message(ctx, ui, "flash_required");
+            self.display_required_message(ctx, ui, "flash_required");
 
-        ui.horizontal(|ui| {
-            ui.label("RAM (kb):");
-            ui.add(egui::Slider::new(&mut self.ram, 0..=4000));
-        });
+            ui.horizontal(|ui| {
+                ui.label("RAM (kb):");
+                ui.add(egui::Slider::new(&mut self.ram, 0..=4000));
+            });
 
-        self.display_required_message(ctx, ui, "ram_required");
+            self.display_required_message(ctx, ui, "ram_required");
+        }
 
         ui.horizontal(|ui| {
             if self.required_crates.is_empty() {
@@ -565,7 +579,9 @@ impl BoardTomlInfo {
                 ui.label(egui::RichText::new("Field is required. Delete empty crates").color(Color32::RED));
             });
         }
+    }
 
+    pub fn update_pinout_form_UI(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let pins_required_id = egui::Id::new("pins_required");
         let mut display_pins_required : bool = ctx.data_mut(|data| {
             data.get_temp_mut_or(pins_required_id, false).clone()
@@ -575,11 +591,11 @@ impl BoardTomlInfo {
             if self.pinouts.is_empty() {
                 self.pinouts.push(PinoutTomlInfo::default());
             }
-            ui.label("PINOUTS");
 
             ui.vertical(|ui| {
                 let mut n : usize = 0;
                 while n < self.pinouts.len() {
+                    ui.label(format!("PINOUT #{}", n + 1));
                     ui.horizontal(|ui| {
                         PinoutTomlInfo::update_form_UI(&mut self.pinouts[n], ctx, ui);
                         if self.pinouts.len() != 1 {
@@ -593,7 +609,7 @@ impl BoardTomlInfo {
                     });
                     if display_pins_required && self.pinouts[n].pins.contains(&String::new()) {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Field is required. Delete empty pins").color(Color32::RED));
+                            ui.label(egui::RichText::new("Field is required. Replace or delete empty pins").color(Color32::RED));
                         });
                     }
                     if n == self.pinouts.len() -1 && ui.button("Add Pinout").clicked() {
@@ -607,11 +623,19 @@ impl BoardTomlInfo {
     }
 
     pub fn generate_toml_string(&self) -> String {
-        self.get_name() + self.get_manufacturer().as_str() + self.get_board_type().as_str()
-            + self.get_standard().as_str() + self.get_cpu().as_str() + self.get_ram().as_str()
-            + self.get_flash().as_str() + self.get_required_crates().as_str()
-            + self.get_related_crates().as_str() + self.get_bsp().as_str()
-            + self.get_pinouts().as_str()
+        if self.board_type != BoardType::Discrete {
+            self.get_name() + self.get_manufacturer().as_str() + self.get_board_type().as_str()
+                + self.get_standard().as_str() + self.get_cpu().as_str() + self.get_ram().as_str()
+                + self.get_flash().as_str() + self.get_required_crates().as_str()
+                + self.get_related_crates().as_str() + self.get_bsp().as_str()
+                + self.get_pinouts().as_str()
+        } else {
+            self.get_name() + self.get_manufacturer().as_str() + self.get_board_type().as_str()
+                + self.get_standard().as_str()
+                + self.get_required_crates().as_str()
+                + self.get_related_crates().as_str() + self.get_bsp().as_str()
+                + self.get_pinouts().as_str()
+        }
     }
 
     pub fn cleanup(&self, file_path: &Path) -> () {

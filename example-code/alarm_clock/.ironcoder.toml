@@ -1,6 +1,5 @@
 name = "AlarmClock"
 location = "example-code/alarm_clock"
-current_view = "BoardsView"
 
 [system]
 peripheral_boards = []
