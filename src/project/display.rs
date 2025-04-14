@@ -258,14 +258,6 @@ impl Project {
                     .expect("Failed to start serial monitor");
                 
                 println!("Serial monitor clicked");
-                
-                /*
-                let port = serialport::new(self.com_port,self.baud_rate)
-                    .timeout(Duration::from_millis(0))
-                    .open().expect("Port opened");
-                let output = "Hello from the alpha build!".as_bytes();
-                port.write(output).expect("Success!");
-                */
 
             }
         });
