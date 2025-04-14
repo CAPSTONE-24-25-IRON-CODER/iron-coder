@@ -18,7 +18,7 @@ This code was derived using multiple examples from [this](https://github.com/Rah
 Rust project for the _Arduino Uno_.
 
 ## Build Instructions for Testing Outside of Iron Coder
-1. Install prerequisites as described in the [`avr-hal` README] (`avr-gcc`, `avr-libc`, `avrdude`, [`ravedude`]).
+1. Install prerequisites as described in the [`avr-hal` README] (`avr-gcc`, `avrdude`, [`ravedude`]).
 
 2. Run `cargo build` to build the firmware.
 

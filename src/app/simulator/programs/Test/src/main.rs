@@ -48,16 +48,20 @@ fn main() -> ! {
     let (mut tx, mut rx) = serial.split();
     writeln!(tx, "Getting Started in UART\r").unwrap();
     
+    let mut led = gpiod.pd5.into_push_pull_output();
+
     loop {
         let received: u8 = block!(rx.read()).unwrap();
         let receivedChar = received as char;
                 
         match receivedChar {
             '1' => {
-                writeln!(tx, "LED 5 ON").unwrap();
+                writeln!(tx, "LED 5 ON ON").unwrap();
+                led.set_high();
             }
             '\r' => {
-                writeln!(tx, "").unwrap();
+                writeln!(tx, "LED 5 OFF").unwrap();
+                led.set_low();
             }
             _=>{
                 writeln!(tx, "Received: {receivedChar:02}").unwrap();
@@ -68,5 +72,8 @@ fn main() -> ! {
 
         writeln!(tx, "\r").unwrap();
         delay.delay(MicrosDurationU32::millis(100));
+
+        
+
     }
 }

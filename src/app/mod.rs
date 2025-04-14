@@ -17,6 +17,7 @@ use std::process::{Command, Stdio, Child, ChildStdin};
 use std::io::{Write, Read, BufRead, BufReader};
 use std::thread;
 use std::time::Duration;
+use webbrowser;
 
 use sysinfo::{Component, Disk, Networks, Pid, PidExt, ProcessExt, System, SystemExt};
 
@@ -25,6 +26,7 @@ use sysinfo::{Component, Disk, Networks, Pid, PidExt, ProcessExt, System, System
 // Separate modules
 use crate::board;
 use crate::project::Project;
+//use crate::serial-monitor;
 
 pub mod icons;
 use icons::{
@@ -60,7 +62,9 @@ pub struct Warnings {
     pub display_unnamed_project_warning: bool,
     pub display_git_warning: bool,
     pub display_invalid_name_warning: bool,
-    pub display_unsaved_tab_warning: bool
+    pub display_unsaved_tab_warning: bool,
+    #[serde(skip)]
+    pub display_renode_missing_warning: bool,
 }
 
 // The current git state
@@ -114,10 +118,12 @@ pub struct IronCoderApp {
     warning_flags: Warnings,
     git_things: Git,
     settings: Settings,
+    #[serde(skip)]
     simulator_open: bool,
 
     #[serde(skip)]
     renode_process: Option<Child>,
+    #[serde(skip)]
     renode_output: Arc<Mutex<String>>,
 
     #[serde(skip)]
@@ -149,7 +155,8 @@ impl Default for IronCoderApp {
                 display_unnamed_project_warning: false,
                 display_invalid_name_warning: false,
                 display_git_warning: false,
-                display_unsaved_tab_warning: false
+                display_unsaved_tab_warning: false,
+                display_renode_missing_warning: false,
             },
             git_things: Git {
                 display: false,
@@ -353,6 +360,12 @@ impl IronCoderApp {
         });
     }
 
+    /// Read boards from the file system
+    pub fn set_boards(&mut self){
+        let boards_dir = Path::new("./iron-coder-boards"); // consider making this a global macro
+        self.boards = board::get_boards(boards_dir);
+    }
+
     /// Returns a copy of the list of available boards.
     pub fn get_boards(&self) -> Vec<board::Board> {
         self.boards.clone()
@@ -433,7 +446,7 @@ impl IronCoderApp {
                 project.display_bottom_pane(ctx, ui);
             });
             egui::TopBottomPanel::bottom("editor_control_panel").show(ctx, |ui| {
-                project.display_project_toolbar(ctx, ui, &mut self.git_things);
+                project.display_project_toolbar(ctx, ui, &mut self.git_things, &mut self.warning_flags);
             });
             egui::TopBottomPanel::top("editor_tabs").show(ctx, |ui| {
                 project.code_editor.display_editor_tabs(ctx, ui, &mut self.warning_flags);
@@ -447,67 +460,144 @@ impl IronCoderApp {
 
     /// Show the various parts of the project editor
     pub fn display_project_editor(&mut self, ctx: &egui::Context) {
-        // first render the top panel with project name, buttons, etc.
-        egui::TopBottomPanel::top("project_editor_top_panel").show(ctx, |ui| {
-            if let Some(mode) = self.project.display_system_editor_top_bar(ctx, ui, &mut self.warning_flags) {
-                self.mode = mode;
-            }
+        // AUTO GENERATE BOARDS WINDOWS
+        let generate_boards_id = egui::Id::new("show_generate_boards");
+        let new_board_image_id = egui::Id::new("should_show_new_board_image");
+        let new_board_confirmation_screen_id = egui::Id::new("show_new_board_confirmation_screen");
+        let reload_boards_id = egui::Id::new("reload_boards_from_filesystem");
+        let save_failure_id = egui::Id::new("save_board_FAILED");
+
+        // Show the generate boards window, if needed
+        let mut should_show_generate_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(generate_boards_id, false).clone()
         });
-        // now render the central system editor panel
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // Adjust zoom level
-            let scale_id = egui::Id::new("system_editor_scale_factor");
-            let mut scale = ctx.data_mut(|data| {
-                data.get_temp_mut_or(scale_id, 5.0).clone()
-            });
-            const ZOOM_INCREMENT: f32 = 0.2;
-            scale += match ctx.input(|io| io.zoom_delta()) {
-                z if z<1.0 => { -ZOOM_INCREMENT },
-                z if z>1.0 => {  ZOOM_INCREMENT },
-                _          => {  0.0 },
-            };
-            ctx.data_mut(|data| {
-                data.insert_temp(scale_id, scale);
-            });
-            // Display the board editor
-            self.project.display_system_editor_boards(ctx, ui);
-            // Display help text for in-progress connections
-            if let Some(true) = ctx.data(|data| {
-                data.get_temp::<bool>(egui::Id::new("connection_in_progress"))
-            }) {
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                    ui.label("Click the pins to form your connection... or use ESC to cancel.");
-                });
-            }
-        // Display a context menu on right-click.
-        }).response.context_menu(|ui| {
-            let id = egui::Id::new("show_known_boards");
-            let mut should_show_boards_window = ctx.data_mut(|data| {
-                data.get_temp_mut_or(id, false).clone()
-            });
-            if ui.add(egui::Button::new("Add Component")).clicked() {
-                ui.close_menu();
-                should_show_boards_window = true;
-                ctx.data_mut(|data| {
-                    data.insert_temp(id, should_show_boards_window);
-                });
-                if let Some(b) = self.project.display_known_boards(ctx, &mut should_show_boards_window) {
-                    self.project.add_board(b);
+        let mut should_show_new_board_window = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_image_id, false).clone()
+        });
+        let mut should_show_confirmation = ctx.data_mut(|data| {
+            data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
+        });
+
+        if should_show_generate_board_window || should_show_new_board_window || should_show_confirmation {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                if should_show_generate_board_window && !should_show_new_board_window {
+                    self.project.display_generate_new_board(ctx, &mut should_show_generate_board_window);
                 }
-            };
-            let id = egui::Id::new("connection_in_progress");
-            let mut connection_in_progress = ctx.data_mut(|data| {
-                data.get_temp_mut_or(id, false).clone()
-            });
-            if ui.add(egui::Button::new("Add Connection")).clicked() {
-                ui.close_menu();
-                connection_in_progress = true;
                 ctx.data_mut(|data| {
-                    data.insert_temp(id, connection_in_progress);
+                    data.insert_temp(generate_boards_id, should_show_generate_board_window);
                 });
-                // project::display::display_system_editor_boards now proceeds according to this value
-            };
-        });
+
+                // Show the new board window for adding pinouts, if needed
+                should_show_new_board_window = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(new_board_image_id, false).clone()
+                });
+
+                if should_show_new_board_window {
+                    ctx.data_mut(|data| {
+                        data.insert_temp(generate_boards_id, false);
+                    });
+                    self.project.display_new_board_png(ctx, &mut should_show_new_board_window);
+                }
+                ctx.data_mut(|data| {
+                    data.insert_temp(new_board_image_id, should_show_new_board_window);
+                });
+
+                // Show the confirmation screen, if needed
+                let mut should_show_confirmation = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(new_board_confirmation_screen_id, false).clone()
+                });
+                let mut save_failed = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(save_failure_id, false).clone()
+                });
+                let mut reload_boards = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(reload_boards_id, false).clone()
+                });
+
+                if reload_boards {
+                    self.set_boards();
+                    self.project.known_boards = self.boards.clone();
+                    ctx.data_mut(|data| {
+                        data.insert_temp(reload_boards_id, false);
+                    });
+                }
+
+                if should_show_confirmation && !save_failed{
+                    self.project.display_new_board_confirmation(ctx, &mut should_show_confirmation);
+                } else if save_failed {
+                    self.project.display_new_board_failure(ctx, &mut save_failed);
+                }
+
+                ctx.data_mut(|data| {
+                    data.insert_temp(new_board_confirmation_screen_id, should_show_confirmation);
+                });
+                ctx.data_mut(|data| {
+                    data.insert_temp(save_failure_id, save_failed);
+                });
+            });
+
+        } else { // DISPLAY DEFAULT HARDWARE EDITOR
+            // first render the top panel with project name, buttons, etc.
+            egui::TopBottomPanel::top("project_editor_top_panel").show(ctx, |ui| {
+                if let Some(mode) = self.project.display_system_editor_top_bar(ctx, ui, &mut self.warning_flags) {
+                    self.mode = mode;
+                }
+            });
+            // now render the central system editor panel
+            egui::CentralPanel::default().show(ctx, |ui| {
+                // Adjust zoom level
+                let scale_id = egui::Id::new("system_editor_scale_factor");
+                let mut scale = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(scale_id, 5.0).clone()
+                });
+                const ZOOM_INCREMENT: f32 = 0.2;
+                scale += match ctx.input(|io| io.zoom_delta()) {
+                    z if z<1.0 => { -ZOOM_INCREMENT },
+                    z if z>1.0 => {  ZOOM_INCREMENT },
+                    _          => {  0.0 },
+                };
+                ctx.data_mut(|data| {
+                    data.insert_temp(scale_id, scale);
+                });
+                // Display the board editor
+                self.project.display_system_editor_boards(ctx, ui);
+                // Display help text for in-progress connections
+                if let Some(true) = ctx.data(|data| {
+                    data.get_temp::<bool>(egui::Id::new("connection_in_progress"))
+                }) {
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                        ui.label("Click the pins to form your connection... or use ESC to cancel.");
+                    });
+                }
+                // Display a context menu on right-click.
+            }).response.context_menu(|ui| {
+                let id = egui::Id::new("show_known_boards");
+                let mut should_show_boards_window = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(id, false).clone()
+                });
+                if ui.add(egui::Button::new("Add Component")).clicked() {
+                    ui.close_menu();
+                    should_show_boards_window = true;
+                    ctx.data_mut(|data| {
+                        data.insert_temp(id, should_show_boards_window);
+                    });
+                    if let Some(b) = self.project.display_known_boards(ctx, &mut should_show_boards_window) {
+                        self.project.add_board(b);
+                    }
+                };
+                let id = egui::Id::new("connection_in_progress");
+                let mut connection_in_progress = ctx.data_mut(|data| {
+                    data.get_temp_mut_or(id, false).clone()
+                });
+                if ui.add(egui::Button::new("Add Connection")).clicked() {
+                    ui.close_menu();
+                    connection_in_progress = true;
+                    ctx.data_mut(|data| {
+                        data.insert_temp(id, connection_in_progress);
+                    });
+                    // project::display::display_system_editor_boards now proceeds according to this value
+                };
+            });
+        }
     }
 
     /// show/hide the settings window and update the appropriate app state.
@@ -909,6 +999,21 @@ impl IronCoderApp {
 
 
     }
+    pub fn display_serial_monitor(&mut self, ctx: &egui::Context){
+    }
+
+    pub fn display_renode_missing_warning(&mut self, ctx: &egui::Context) {
+        egui::Window::new("Renode Not Found")
+        .open(&mut  self.warning_flags.display_renode_missing_warning)
+        .collapsible(true)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.label("Renode is not installed or not found in your PATH.");
+            if ui.button("Download Renode").clicked() {
+                let _ = webbrowser::open("https://github.com/renode/renode");
+            }
+        });
+    }
 }
 
 impl eframe::App for IronCoderApp {
@@ -946,6 +1051,7 @@ impl eframe::App for IronCoderApp {
         self.display_unnamed_project_warning(ctx);
         self.display_invalid_name_warning(ctx);
         self.display_resource_monitor(ctx);
+        self.display_renode_missing_warning(ctx);
 
 
         let save_shortcut = KeyboardShortcut::new(Modifiers::CTRL, Key::S);
@@ -996,6 +1102,7 @@ impl eframe::App for IronCoderApp {
             }
         }
 
+        //self.display_serial_monitor(ctx);
         self.display_git_window(ctx);
         self.display_git_warning(ctx);
         self.display_unsaved_tab_warning(ctx);

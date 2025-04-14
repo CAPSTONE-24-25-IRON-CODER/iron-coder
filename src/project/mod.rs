@@ -41,6 +41,20 @@ const PROJECT_FILE_NAME: &'static str = ".ironcoder.toml";
 
 pub type Result = core::result::Result<(), ProjectIOError>;
 
+// Simulator Imports
+pub mod simulator_helpers;
+use toml::de::from_str;
+use toml::Value;
+
+#[derive(Debug, Deserialize, Clone)]
+struct Package {
+    name: String,
+    version: Option<String>,
+    edition: Option<String>,
+}
+
+
+
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum ProjectIOError {
@@ -297,7 +311,7 @@ impl Project {
     }
 
     /// Build the code with Cargo
-    fn build(&mut self, ctx: &egui::Context) {
+    pub fn build(&mut self, ctx: &egui::Context) {
         // Make sure we have a valid path
         if let Some(path) = &self.location {
             info!("building project at {}", path.display().to_string());
@@ -320,6 +334,100 @@ impl Project {
         }
 
     }
+
+    // // this is used when the simulator is asked to load the program
+    // pub fn build_and_create_script(&mut self, ctx: &egui::Context) {
+    //     // Build the project
+    //     self.build(ctx);
+    
+    //     // Get the ELF file path
+    //     if let Some(elf_path) = self.get_elf_file_path(self.location.as_ref().expect("No project location found.")) {
+    //         let script_path = Path::new(".\\src\\app\\simulator\\renode\\scripts\\generated/currentScript.resc");
+    
+    //         // Create Renode script
+    //         if let Err(e) = simulator_helpers::create_renode_script(&elf_path, script_path) {
+    //             self.info_logger(&format!("Error creating Renode script: {}", e));
+    //         } else {
+    //             self.info_logger("Renode script created successfully.");
+    //         }
+    //     } else {
+    //         self.info_logger("No ELF file found.");
+    //     }
+    // }
+    
+    // // since different projects might have different names, we dynamically obtain them so we have the right file
+    // fn get_package_name_from_toml(&self, project_path: &Path) -> Option<String> {
+    //     // Load the Cargo.toml content
+    //     let toml_path = project_path.join("Cargo.toml");
+    //     let toml_content = fs::read_to_string(toml_path).ok()?;
+    
+    //     // Parse the TOML content
+    //     let parsed_toml: toml::Value = toml_content.parse().ok()?;
+    
+    //     // Extract the package name
+    //     parsed_toml
+    //         .get("package")
+    //         .and_then(|pkg| pkg.get("name"))
+    //         .and_then(|name| name.as_str())
+    //         .map(|s| s.to_string())
+    // }
+    
+    // // Get the path to the ELF file after building the project
+    // fn get_elf_file_path(&self, project_path: &Path) -> Option<PathBuf> {
+    //     let target = self.get_project_build_target(project_path)
+    //     .unwrap_or_else(|| "thumbv6m-none-eabi".to_string());
+
+    //     if let Some(package_name) = self.get_package_name_from_toml(project_path) {
+    //         let target_dir = project_path.join(format!("target/{}/debug", target));
+    //         let elf_file_path = target_dir.join(&package_name);
+    
+    //         // Try with and without an extension
+    //         if elf_file_path.exists() {
+    //             Some(elf_file_path)
+    //         } else {
+    //             // Try adding the .elf extension
+    //             let elf_with_extension = elf_file_path.with_extension("elf");
+    //             if elf_with_extension.exists() {
+    //                 Some(elf_with_extension)
+    //             } else {
+    //                 None
+    //             }
+    //         }
+    //     } else {
+    //         None
+    //     }
+    // }
+
+    // fn get_project_build_target(&self, project_path: &Path) -> Option<String> {
+    //     let cargo_config_path = project_path.join(".cargo/config.toml");
+        
+    //     if cargo_config_path.exists() {
+    //         let config_content = fs::read_to_string(&cargo_config_path).ok()?;
+    //         let parsed_toml: Value = config_content.parse().ok()?;
+
+    //         return parsed_toml.get("build")
+    //             .and_then(|build| build.get("target"))
+    //             .and_then(|target| target.as_str())
+    //             .map(|s| s.to_string());
+    //     }
+
+    //     // Fallback: If `.cargo/config.toml` doesn’t exist, check `Cargo.toml`
+    //     let cargo_toml_path = project_path.join("Cargo.toml");
+
+    //     if cargo_toml_path.exists() {
+    //         let cargo_content = fs::read_to_string(&cargo_toml_path).ok()?;
+    //         let parsed_toml: Value = cargo_content.parse().ok()?;
+
+    //         return parsed_toml.get("package")
+    //             .and_then(|pkg| pkg.get("metadata"))
+    //             .and_then(|metadata| metadata.get("build-target"))
+    //             .and_then(|target| target.as_str())
+    //             .map(|s| s.to_string());
+    //     }
+
+    //     None
+    // }
+
 
     pub fn new_file(&mut self) -> io::Result<()> {
         if self.location == None {
