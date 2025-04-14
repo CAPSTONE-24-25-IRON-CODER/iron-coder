@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use crate::gui::COLORS;
-use crate::data::{get_epoch_ms, SerialDirection};
+use crate::gui::{get_epoch_ms, SerialDirection};
 use crate::{Packet, APP_INFO, PREFERENCES_KEY_SERIAL};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

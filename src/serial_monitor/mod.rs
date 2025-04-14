@@ -12,17 +12,16 @@ use std::sync::{mpsc, Arc, RwLock};
 use std::time::Duration;
 use std::{env, thread};
 
-use crate::data::{DataContainer, Packet};
+use crate::gui::{DataContainer, Packet};
 use crate::gui::{load_gui_settings, SerialMonitor, RIGHT_PANEL_WIDTH};
-use crate::io::{save_to_csv, FileOptions};
+use crate::gui::{save_to_csv, FileOptions};
 use crate::serial::{load_serial_settings, serial_thread, Device};
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui, icon_data};
 use preferences::AppInfo;
 
-mod data;
 mod gui;
-mod io;
+//mod io;
 mod serial;
 
 const APP_INFO: AppInfo = AppInfo {

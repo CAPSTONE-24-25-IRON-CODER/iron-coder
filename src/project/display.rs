@@ -314,12 +314,6 @@ impl Project {
             }
 
             ui.separator();
-            /*
-            let id = egui::Id::new("show_serial_monitor");
-            let mut should_show_serial_monitor = ctx.data_mut(|data| {
-                data.get_temp_mut_or(id, false).clone()
-            });
-            */
             if ui.button("Serial Monitor").clicked(){
                 //display serial monitor window
 

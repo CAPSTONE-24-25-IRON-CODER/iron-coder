@@ -4,16 +4,16 @@ use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::fmt;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::error::Error;
+use csv::{WriterBuilder};
 
-// use crate::color_picker::{color_picker_widget, color_picker_window, COLORS};
-use crate::data::{DataContainer, SerialDirection};
 use crate::serial::{clear_serial_settings, save_serial_settings, Device, SerialDevices};
-use crate::FileOptions;
 use crate::{APP_INFO, PREFERENCES_KEY};
 use eframe::egui::panel::Side;
 use eframe::egui::{
-    Align2, CollapsingHeader, Color32, FontFamily, FontId, InnerResponse, KeyboardShortcut, Pos2, Sense, Ui, Vec2, Visuals,
+    Align2, CollapsingHeader, Color32, FontFamily, FontId, InnerResponse, Pos2, Sense, Ui, Vec2, Visuals,
     vec2, Response, Stroke,
 };
 use eframe::epaint::StrokeKind;
@@ -33,18 +33,6 @@ const BAUD_RATES: &[u32] = &[
     300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 116500, 230400, 128000, 460800,
     576000, 921600,
 ];
-const SAVE_FILE_SHORTCUT: KeyboardShortcut =
-    KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::S);
-
-/*
-const SAVE_PLOT_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(
-    egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
-    egui::Key::S,
-);
-*/
-
-const CLEAR_PLOT_SHORTCUT: KeyboardShortcut =
-    KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::X);
 
 #[derive(Clone)]
 pub enum FileDialogState {
@@ -96,6 +84,131 @@ pub fn load_gui_settings() -> GuiSettingsContainer {
         }
         gui_settings
     })
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SerialDirection {
+    Send,
+    Receive,
+}
+
+impl fmt::Display for SerialDirection {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SerialDirection::Send => write!(f, "SEND"),
+            SerialDirection::Receive => write!(f, "RECV"),
+        }
+    }
+}
+
+pub fn get_epoch_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+}
+
+#[derive(Clone, Debug)]
+pub struct Packet {
+    pub relative_time: f64,
+    pub absolute_time: f64,
+    pub direction: SerialDirection,
+    pub payload: String,
+}
+
+impl Default for Packet {
+    fn default() -> Packet {
+        Packet {
+            relative_time: 0.0,
+            absolute_time: get_epoch_ms() as f64,
+            direction: SerialDirection::Send,
+            payload: "".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DataContainer {
+    pub time: Vec<f64>,
+    pub absolute_time: Vec<f64>,
+    pub dataset: Vec<Vec<f32>>,
+    pub raw_traffic: Vec<Packet>,
+    pub loaded_from_file: bool,
+}
+
+impl Default for DataContainer {
+    fn default() -> DataContainer {
+        DataContainer {
+            time: vec![],
+            absolute_time: vec![],
+            dataset: vec![vec![]],
+            raw_traffic: vec![],
+            loaded_from_file: false,
+        }
+    }
+}
+
+/// A set of options for saving data to a CSV file.
+#[derive(Debug)]
+pub struct FileOptions {
+    pub file_path: PathBuf,
+    pub save_absolute_time: bool,
+    pub save_raw_traffic: bool,
+    pub names: Vec<String>,
+}
+
+pub fn save_to_csv(data: &DataContainer, csv_options: &FileOptions) -> Result<(), Box<dyn Error>> {
+    let mut wtr = WriterBuilder::new()
+        .has_headers(false)
+        .from_path(&csv_options.file_path)?;
+    let mut header = vec!["Time [ms]".to_string()];
+    header.extend_from_slice(&csv_options.names);
+    wtr.write_record(header)?;
+    for j in 0..data.dataset[0].len() {
+        let time = if csv_options.save_absolute_time {
+            data.absolute_time[j].to_string()
+        } else {
+            data.time[j].to_string()
+        };
+        let mut data_to_write = vec![time];
+        for value in data.dataset.iter() {
+            data_to_write.push(value[j].to_string());
+        }
+        wtr.write_record(&data_to_write)?;
+    }
+    wtr.flush()?;
+    if csv_options.save_raw_traffic {
+        let mut path = csv_options.file_path.clone();
+        let mut file_name = path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
+            .replace(".csv", "");
+        file_name += "raw.csv";
+        path.set_file_name(file_name);
+        save_raw(data, &path)?
+    }
+    Ok(())
+}
+
+pub fn save_raw(data: &DataContainer, path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    let mut wtr = WriterBuilder::new().has_headers(false).from_path(path)?;
+    let header = vec![
+        "Time [ms]".to_string(),
+        "Abs Time [ms]".to_string(),
+        "Raw Traffic".to_string(),
+    ];
+    wtr.write_record(header)?;
+
+    for j in 0..data.dataset[0].len() {
+        let mut data_to_write = vec![data.time[j].to_string(), data.absolute_time[j].to_string()];
+        data_to_write.push(data.raw_traffic[j].payload.clone());
+        wtr.write_record(&data_to_write)?;
+    }
+    wtr.flush()?;
+    Ok(())
 }
 
 pub enum ColorWindow {
@@ -892,7 +1005,6 @@ impl SerialMonitor {
                     )))
                     .on_hover_text("Save Plot Data to CSV.")
                     .clicked()
-                    || ui.input_mut(|i| i.consume_shortcut(&SAVE_FILE_SHORTCUT))
                 {
                     self.file_dialog_state = FileDialogState::Save;
                     self.file_dialog.save_file();
@@ -927,7 +1039,6 @@ impl SerialMonitor {
             )))
             .on_hover_text("Clear Data from Plot.")
             .clicked()
-            || ui.input_mut(|i| i.consume_shortcut(&CLEAR_PLOT_SHORTCUT))
         {
             log::info!("Cleared recorded Data");
             if let Err(err) = self.clear_tx.send(true) {
