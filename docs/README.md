@@ -142,5 +142,6 @@ parameters that are needed to describe the boards and work within the hardware e
   - Sometimes drawn wire connections will appear on top of the add board menu and other windows
   - More than one discrete component cannot be added to the hardware editor
   - Tree command in windows OS causes crash, possibly due to string variable not being able to hold data from shell output
-  - Renode does not automatically compile code done within the window so will require user to compile before starting the script 
+  - Renode does not automatically compile code done within the window so will require user to compile before starting the script
+  - For macOS, Renode needs to manually approved to run in System Settings since Renode's developer is not included in Apple's list of approved developers
 
