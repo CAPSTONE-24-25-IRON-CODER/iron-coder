@@ -21,6 +21,7 @@ fn main() -> ! {
     // Splitting GPIOA and GPIOD into separate pins
     let gpioa = dp.GPIOA.split();
     let gpiod = dp.GPIOD.split();
+    let gpiog = dp.GPIOG.split();
 
     // Configuring Rest and Clock Control, sets up deviced at high speeds
     let rcc = dp.RCC.constrain();
@@ -51,7 +52,8 @@ fn main() -> ! {
     writeln!(tx, "R: no car present\r").unwrap();
     writeln!(tx, "E: Emergency\r").unwrap();
     
-    let mut led = gpiod.pd5.into_push_pull_output();
+    let mut GreenLED = gpiog.pg13.into_push_pull_output();
+    let mut RedLED = gpiog.pg14.into_push_pull_output();
 
     loop {
         let received: u8 = block!(rx.read()).unwrap();
@@ -60,19 +62,23 @@ fn main() -> ! {
         match receivedChar {
             'G' => {
                 writeln!(tx, "Green Light On").unwrap();
-                led.set_high();
+                GreenLED.set_high();
+                RedLED.set_low();
             }
             'R' => {
                 writeln!(tx, "Red Light On").unwrap();
-                led.set_low();
+                GreenLED.set_low();
+                RedLED.set_high();
             }
             'E' => {
                 writeln!(tx, "Emergency Light On").unwrap();
-                led.set_high();
+                GreenLED.set_low();
+                RedLED.set_low();
             }
             '\r' => {
-                writeln!(tx, "Change").unwrap();
-                led.set_low();
+                writeln!(tx, "Wait").unwrap();
+                GreenLED.set_low();
+                RedLED.set_low();
             }
             _=>{
                 writeln!(tx, "Received: {receivedChar:02}").unwrap();
