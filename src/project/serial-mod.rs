@@ -1,8 +1,3 @@
-extern crate core;
-extern crate csv;
-extern crate preferences;
-extern crate serde;
-
 use std::cmp::max;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
@@ -10,15 +5,15 @@ use std::sync::{mpsc, Arc, RwLock};
 use std::time::Duration;
 use std::{env, thread};
 
-use crate::serial-monitor::{DataContainer, Packet};
-use crate::serial-monitor::{load_gui_settings, SerialMonitor, RIGHT_PANEL_WIDTH};
-use crate::serial-monitor::{save_to_csv, FileOptions};
+use crate::serial_monitor::{DataContainer, Packet};
+use crate::serial_monitor::{load_gui_settings, SerialMonitor, RIGHT_PANEL_WIDTH};
+use crate::serial_monitor::{save_to_csv, FileOptions};
 use crate::serial::{load_serial_settings, serial_thread, Device};
 use eframe::egui::{vec2, ViewportBuilder, Visuals};
 use eframe::{egui};
 use preferences::AppInfo;
 
-mod gui;
+mod serial_monitor;
 mod serial;
 
 const PREFERENCES_KEY: &str = "config/gui";
