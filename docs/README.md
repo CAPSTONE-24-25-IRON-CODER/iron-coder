@@ -69,6 +69,10 @@
   - Simulator
       - Added simulator button and window for future use of simulation
       - Support for basic emulation of code through qemu
+  - Serial monitor
+      - Added button component to open serial monitor within IronCoder
+      - Set up form inputs for initiating serial connection
+      - USART capabilities for the serial monitor to detect transmissions
 # Iron Coder Work Done (Beta Build)
 - Automate Generation of Boards
     - Add user input validation to the TOML information form
@@ -95,6 +99,10 @@ SVG parser only support PNG image types
     - Added the option to open and close Renode
     - Added separate threads to read Renode output
     - Added another thread for state saving every 5 minutes
+- Serial monitor
+    - Added device detection from the user's system
+    - Connection status indicator and other UI responsiveness
+    - Added further error handling and input validation, as well as persistance of user input data
 # Iron Coder Work Done (Release Candidate)
 - Automate Generation of Boards
   - Users no longer need to restart the application to use their new component
@@ -117,7 +125,12 @@ SVG parser only support PNG image types
 - Terminal
   - Fixed issues with parsing colored text in terminal when running certain powershell extensions.
   - Added multiple tabs to terminal pane for switching between output, terminal, and simulator.
-  - Added error handling if shell is not able to be opened on launch. 
+  - Added error handling if shell is not able to be opened on launch.
+- Serial monitor
+  - Added functionality for the plotter based on parsing raw data
+  - Added input validation of user program code transmissions to be UTF-8
+  - Created color modification window for users to select a particular color for the plot data
+  - Created new pop-up window if a device is not selected
 # Iron Coder Work Done (Production Release)
 - Installation packages for Windows and macOS
   - Quickstart documentation posted on Iron Coder Forum
@@ -132,6 +145,8 @@ SVG parser only support PNG image types
   - Tested with non-team members 
 - Terminal
   - Add support for macOS
+- Serial monitor
+  - Integrated serial monitor updates to the IronCoder output tab
 # Iron Coder Architecture
 Iron Coder is split into 3 main crates, one that handels the application itself, one for the boards, and the last for projects. The application uses both the boards and projects to
 seemlessly create both the hardware and code editors. Within the project source code the project serves as a container for the path to where the project is stored, the boards that
