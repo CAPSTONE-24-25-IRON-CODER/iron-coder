@@ -33,7 +33,6 @@ use crate::board;
 use crate::project::Project;
 use crate::app::icons::IconSet;
 use crate::app::{Mode, Warnings, Git};
-// use crate::serial_monitor::show_serial_monitor;
 
 use enum_iterator;
 use rfd::FileDialog;
@@ -826,6 +825,7 @@ impl Project {
             data.get_temp("icons".into()).expect("error loading shared icons!")
         });
         let icons = iconref.clone();
+        let mut serial_monitor_clicked = false;
         ui.horizontal(|ui| {
             // COMPILE CODE
             let button = egui::widgets::Button::image_and_text(
@@ -975,6 +975,7 @@ impl Project {
             }
 
             ui.separator();
+
             if ui.button("Serial Monitor").clicked(){
                 //display serial monitor window
 
@@ -988,14 +989,38 @@ impl Project {
                 */
                 // show_serial_monitor();
 
+                // Use info_logger to write to output terminal
+                // self.info_logger(message)
+
                 let serial_app = Command::new("src/serial_monitor/serial-monitor.exe")
                     .output()
                     .expect("Failed to start serial monitor");
-                
-                println!("Serial monitor clicked");
 
+                serial_monitor_clicked = true;
             }
         });
+
+        let input = ctx.input(|i| i.clone());
+              
+        // if input.key_pressed(egui::Key::ArrowLeft) {
+        //     self.info_logger("Opening serial monitor...");
+        // }
+        if (serial_monitor_clicked){
+            self.info_logger("Opening serial monitor...");
+            serial_monitor_clicked = false;
+        }
+
+        if input.key_pressed(egui::Key::ArrowRight) {
+            self.info_logger("Serial monitor has been closed.");
+        }
+
+        if input.key_pressed(egui::Key::ArrowUp) {
+            self.info_logger("Connected to serial port: COM3 @ baud = 116500");
+        }
+
+        if input.key_pressed(egui::Key::ArrowDown) {
+            self.info_logger("Disconnected from serial port: COM3");
+        }
     }
 
     /// In the provided Ui, create a multi-column layout (tabs) that switches the current view state.

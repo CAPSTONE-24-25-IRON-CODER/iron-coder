@@ -26,7 +26,6 @@ use sysinfo::{Component, Disk, Networks, Pid, PidExt, ProcessExt, System, System
 // Separate modules
 use crate::board;
 use crate::project::Project;
-//use crate::serial-monitor;
 
 pub mod icons;
 use icons::{

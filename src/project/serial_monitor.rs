@@ -1131,7 +1131,7 @@ impl SerialMonitor {
                     ui.add_space(20.0);
                     ui.separator();
                     ui.collapsing("Debug logs:", |ui| {
-                        egui_logger::logger_ui().show(ui);
+                        //egui_logger::logger_ui().show(ui);
                     });
 
                     match self.file_dialog_state {
